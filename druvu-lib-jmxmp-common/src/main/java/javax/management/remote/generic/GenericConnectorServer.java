@@ -1,0 +1,173 @@
+/*
+ * @(#)file      GenericConnectorServer.java
+ * @(#)author    Sun Microsystems, Inc.
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ *
+ * Copyright (c) 2007 Sun Microsystems, Inc. All Rights Reserved.
+ *
+ * The contents of this file are subject to the terms of either the GNU General
+ * Public License Version 2 only ("GPL") or the Common Development and
+ * Distribution License("CDDL")(collectively, the "License"). See the LICENSE
+ * file at the repo root. Sun designates this file as subject to the
+ * "Classpath" exception as provided by Sun in the GPL Version 2 section.
+ *
+ * Portions Copyrighted 2026 — com.druvu fork (2.0): rewritten as a thin
+ * facade over the ServiceLoader-discovered server engine
+ * (com.druvu.jmxmp.spi.GenericConnectorServerEngine). The public API surface
+ * (JMXConnectorServer + getAttributes + OBJECT_WRAPPING /
+ * MESSAGE_CONNECTION_SERVER constants) is preserved; the mandatory
+ * { TLS, SASL/PLAIN } + JMXAuthenticator security gate stays here
+ * (consumer-observable); all runtime moved to com.druvu.jmxmp.server.generic.
+ */
+
+package javax.management.remote.generic;
+
+import com.druvu.jmxmp.shared.CheckProfiles;
+import com.druvu.jmxmp.spi.GenericConnectorServerEngine;
+import com.druvu.jmxmp.spi.GenericConnectorServerEngineProvider;
+import com.druvu.jmxmp.spi.ServerConnectionCallback;
+import com.druvu.jmxmp.util.EnvHelp;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+import java.util.ServiceLoader;
+import javax.management.MBeanServer;
+import javax.management.remote.JMXAuthenticator;
+import javax.management.remote.JMXConnectorServer;
+import javax.management.remote.JMXServiceURL;
+
+/**
+ * A JMX API connector server that accepts client connections over a {@link MessageConnectionServer}. Since 2.0 this
+ * class is a thin facade: the implementation is supplied at runtime by a {@link GenericConnectorServerEngineProvider}
+ * located via {@link ServiceLoader} (the {@code com.druvu.jmxmp.server} module). The mandatory {@code TLS SASL/PLAIN}
+ * policy and the {@link JMXAuthenticator} requirement are enforced here, before any engine is created.
+ */
+public class GenericConnectorServer extends JMXConnectorServer {
+
+    /**
+     * Name of the attribute that specifies the object wrapping for parameters whose deserialization requires special
+     * treatment.
+     */
+    public static final String OBJECT_WRAPPING = "jmx.remote.object.wrapping";
+
+    /** Name of the attribute that specifies how this connector server listens for client connections. */
+    public static final String MESSAGE_CONNECTION_SERVER = "jmx.remote.message.connection.server";
+
+    private GenericConnectorServerEngine engine;
+    private Map env;
+    private JMXAuthenticator authenticator;
+
+    public GenericConnectorServer(Map env, MBeanServer mbs) {
+        super(mbs);
+        if (env == null) {
+            this.env = Collections.EMPTY_MAP;
+        } else {
+            EnvHelp.checkAttributes(env);
+            this.env = Collections.unmodifiableMap(env);
+            // Mandatory policy (2.0): explicit env must specify exactly
+            // jmx.remote.profiles="TLS SASL/PLAIN" and supply a JMXAuthenticator.
+            CheckProfiles.enforceSpec((String) this.env.get("jmx.remote.profiles"), this.env);
+            this.authenticator = requireAuthenticator(this.env);
+        }
+    }
+
+    /**
+     * Resolve the mandatory {@link JMXAuthenticator}: env entry {@code JMXConnectorServer.AUTHENTICATOR} first, then
+     * {@code ServiceLoader}.
+     */
+    private static JMXAuthenticator requireAuthenticator(Map env) {
+        Object a = env.get(JMXConnectorServer.AUTHENTICATOR);
+        if (a instanceof JMXAuthenticator auth) {
+            return auth;
+        }
+        return ServiceLoader.load(JMXAuthenticator.class)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("JMXMP server requires a JMXAuthenticator. Set "
+                        + JMXConnectorServer.AUTHENTICATOR + " in the env map or register a "
+                        + "JMXAuthenticator service provider. For deliberately-unauthenticated "
+                        + "deployments use AllowAnyAuthenticator with explicit acknowledgement."));
+    }
+
+    public Map getAttributes() {
+        Map map = EnvHelp.filterAttributes(env);
+        return Collections.unmodifiableMap(map);
+    }
+
+    public void start() throws IOException {
+        MBeanServer mbs = getMBeanServer();
+        if (mbs == null) {
+            throw new IllegalStateException("This connector server is not attached to an MBean server");
+        }
+        // Mandatory policy (2.0), unconditional server gate — holds even via
+        // the no-arg / null-env construction path (JMXConnectorServerFactory).
+        CheckProfiles.enforceSpec((String) env.get("jmx.remote.profiles"), env);
+        if (authenticator == null) {
+            authenticator = requireAuthenticator(env);
+        }
+
+        synchronized (this) {
+            if (engine != null && engine.isActive()) {
+                return;
+            }
+            if (engine == null) {
+                GenericConnectorServerEngineProvider provider = ServiceLoader.load(
+                                GenericConnectorServerEngineProvider.class)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException(
+                                "No GenericConnectorServerEngineProvider implementation found; "
+                                        + "add com.druvu.jmxmp.server to the module path / classpath"));
+                engine = provider.newEngine(this, new EngineNotifier(), null, env, null, mbs);
+            }
+            engine.start();
+        }
+    }
+
+    public void stop() throws IOException {
+        if (engine != null) {
+            engine.stop();
+        }
+    }
+
+    public boolean isActive() {
+        return engine != null && engine.isActive();
+    }
+
+    public JMXServiceURL getAddress() {
+        return engine == null ? null : engine.getAddress();
+    }
+
+    // ----------------------------------------------
+    // Engine -> facade notification bridge. Kept PRIVATE (inner class +
+    // private super-bridges) so the public API stays bit-for-bit identical
+    // to baseline: JMXConnectorServer.connectionOpened/Closed/Failed remain
+    // protected and the internal SPI does not leak into this type's
+    // signature (mirrors the client facade's functional-interface bridge).
+    // ----------------------------------------------
+
+    private void fireOpened(String id, String m, Object u) {
+        super.connectionOpened(id, m, u);
+    }
+
+    private void fireClosed(String id, String m, Object u) {
+        super.connectionClosed(id, m, u);
+    }
+
+    private void fireFailed(String id, String m, Object u) {
+        super.connectionFailed(id, m, u);
+    }
+
+    private final class EngineNotifier implements ServerConnectionCallback {
+        public void connectionOpened(String id, String m, Object u) {
+            fireOpened(id, m, u);
+        }
+
+        public void connectionClosed(String id, String m, Object u) {
+            fireClosed(id, m, u);
+        }
+
+        public void connectionFailed(String id, String m, Object u) {
+            fireFailed(id, m, u);
+        }
+    }
+}

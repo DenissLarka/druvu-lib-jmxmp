@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+		 xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.druvu</groupId>
+		<artifactId>druvu-lib-jmxmp</artifactId>
+		<version>1.5.0-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>druvu-lib-jmxmp-validation</artifactId>
+	<name>druvu-lib-jmxmp-validation (modular matrix)</name>
+	<packaging>jar</packaging>
+
+	<!--
+	  VALIDATION & COMPATIBILITY MATRIX.
+
+	  Unlike `it` (classpath, useModulePath=false), this module runs its
+	  TestNG suite on the JPMS MODULE PATH via a real test module-info
+	  (`requires com.druvu.jmxmp.client; requires com.druvu.jmxmp.server;`).
+	  That makes it the only place split-package freedom is actually
+	  asserted under the module system (the whole 3-module thesis): if
+	  javax.management.remote.* / com.druvu.jmxmp.* leaked across the
+	  client/server seam, module resolution would fail at test launch.
+
+	  Covers: both-sides modular loopback over TLS+SASL, the ServiceLoader
+	  engine-missing message, profile negotiation (providers resolved from
+	  the renamed packages with no jmx.remote.profile.provider.pkgs
+	  override), a 1000-notification ordered load, and JMXMPConnector
+	  serialization stability. The public-API snapshot diff (ApiSnapshotIT,
+	  via the javap ToolProvider) and the deployment-shape resolution +
+	  consumer-recompile checks (DeploymentShapesIT, via java.lang.module +
+	  the javac ToolProvider, with one ProcessBuilder-launched probe for the
+	  engine-missing case) are pure-Java TestNG ITs — no shell, runs on any
+	  OS. The negative (mandatory-policy) matrix already lives in
+	  druvu-lib-jmxmp-it/SecurityPolicyIT (classpath) — not duplicated here.
+
+	  No artifact is published from this module.
+	-->
+
+	<dependencies>
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-common</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-client</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-server</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration combine.self="override">
+					<!-- The point of this module: run ON the module path so the
+					     test module-info's `requires client/server` forces real
+					     JPMS resolution (split-package freedom assertion). -->
+					<useModulePath>true</useModulePath>
+					<includes>
+						<include>**/*IT.java</include>
+					</includes>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

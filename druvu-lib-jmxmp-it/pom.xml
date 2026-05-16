@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+		 xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.druvu</groupId>
+		<artifactId>druvu-lib-jmxmp</artifactId>
+		<version>1.5.0-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>druvu-lib-jmxmp-it</artifactId>
+	<name>druvu-lib-jmxmp-it (integration tests)</name>
+	<packaging>jar</packaging>
+
+	<!--
+	  INTEGRATION-TEST MODULE. Holds the cross-module TLS+SASL round-trip and
+	  security-policy suites that exercise the full common+client+server stack
+	  end-to-end (ServiceLoader engine/provider discovery, mandatory-security
+	  negative paths). No main code, no module-info: a plain classpath
+	  test harness — surefire runs with useModulePath=false. Renamed from the
+	  former `legacy` transitional scaffold once its last main source
+	  migrated to the three modules (the split-package transitional state
+	  no longer exists). Kept as the permanent regression net; the
+	  modular-deployment matrix (validation module) is additive to, not a
+	  replacement for, this suite. No artifact is published from this module.
+	-->
+
+	<dependencies>
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-common</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<!-- Full stack on the test/runtime classpath so ServiceLoader resolves
+		     the client and server engines/providers. -->
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-client</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-server</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+
+</project>
