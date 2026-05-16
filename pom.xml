@@ -68,7 +68,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
-					<version>3.2.5</version>
+					<version>3.5.5</version>
 					<configuration>
 						<!-- Integration tests use only the public JMX API and discover
 						     the JMXMP provider via META-INF/services on the classpath.
