@@ -211,11 +211,12 @@ public class AdminClient implements ClientAdmin {
                 logger.trace("connectionOpen", "Server Connection Id [ " + connectionId + " ]");
             }
 
-            // Mandatory policy (2.0): verify the negotiated profile set is
-            // exactly { TLS, SASL/PLAIN } before handing back a usable
-            // connection. On failure the SecurityException is caught below,
-            // a HandshakeErrorMessage is sent, and the connection is closed.
-            CheckProfiles.enforce(profileList, env);
+            // Secure-default client policy (2.0): the negotiated profile set
+            // must be exactly { TLS, SASL/PLAIN } unless a ClientProfilePolicy
+            // was supplied programmatically in the env. On failure the
+            // SecurityException is caught below, a HandshakeErrorMessage is
+            // sent, and the connection is closed.
+            CheckProfiles.enforceClient(profileList, env);
         } catch (Exception e) {
             if (sendError) {
                 try {

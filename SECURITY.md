@@ -60,12 +60,19 @@ Expectations, stated honestly:
 
 ## What this fork removed (deliberate attack-surface reduction)
 
-The following were cut **on purpose** relative to upstream OpenDMK. These are
-not configurable — there is no escape hatch.
+The following were cut **on purpose** relative to upstream OpenDMK. On the
+**server** side these are not configurable — there is no escape hatch. On the
+**client** side the transport policy is relaxable, but only through a typed,
+code-only opt-out (see *Client transport policy* below); it can never be
+flipped by a system property, properties file, or the command line.
 
-- **No plaintext transport.** The only accepted profile set is exactly
-  `TLS SASL/PLAIN`. A connection without TLS is refused at construction.
-  Passive sniffing and trivial MITM of cleartext JMX are eliminated.
+- **No plaintext transport (server: absolute; client: default).** The only
+  accepted profile set is exactly `TLS SASL/PLAIN`. A server without TLS is
+  refused at construction, unconditionally. A client without TLS is refused
+  at construction *by default*; the operator can opt out only by passing a
+  `ClientProfilePolicy` instance (below). Passive sniffing and trivial MITM
+  of cleartext JMX are eliminated by default on both ends and absolutely on
+  the server.
 - **No unauthenticated access path.** A `JMXAuthenticator` is mandatory on the
   server; it cannot be constructed without one. The opt-out
   (`AllowAnyAuthenticator`) refuses to construct unless the deployer sets an
@@ -76,6 +83,8 @@ not configurable — there is no escape hatch.
   accepted. Every other SASL mechanism — CRAM-MD5, DIGEST-MD5, GSSAPI,
   EXTERNAL, OAUTHBEARER — is rejected **at construction**, not after a
   handshake. The "negotiate the peer down to a weak mechanism" class is gone.
+  (A `ClientProfilePolicy.require(...)` opt-out pins an *exact* alternate
+  set chosen in code; it does not re-introduce runtime down-negotiation.)
 - **RMI code path removed.** All `java.rmi` usage (the RMI connector /
   exporter / `UnicastRemoteObject` paths inherited from OpenDMK) was deleted.
   JMXMP is socket-only; there is no RMI registry or RMI export surface.
@@ -144,6 +153,44 @@ What it does **not** protect against:
   implementation. `AllowAnyAuthenticator` authenticates nobody — it exists for
   deliberately-open deployments and is gated behind an explicit acknowledgement
   for exactly that reason.
+
+### Client transport policy (the asymmetric, code-only opt-out)
+
+The mandatory `TLS SASL/PLAIN` policy is the right default for a **server** —
+a deployer must not be able to expose a weak inbound listener that anyone on
+the network can reach. It is needlessly restrictive for a **client**:
+connecting outbound is the operator's own informed decision, the exposure is
+their own session, and a general-purpose JMX client routinely must reach
+existing, often plaintext, endpoints it does not control.
+
+So the client policy is **secure by default, relaxable only in code**:
+
+- Supply nothing → the client enforces exactly `TLS SASL/PLAIN`, identical to
+  the pre-2.0-opt-out behaviour. Existing deployments are unaffected.
+- `env.put(ClientProfilePolicy.ENV_KEY, ClientProfilePolicy.unrestricted())`
+  → no client-side profile enforcement (including plaintext).
+- `...ClientProfilePolicy.require("TLS")` → an exact alternate set, chosen in
+  code (e.g. TLS-only, no SASL).
+
+This is **not** an environment knob. The gate relaxes only when the value
+under `ClientProfilePolicy.ENV_KEY` *is an instance of* `ClientProfilePolicy`.
+A `-D` system property, a properties file, or any string under that key can
+only ever carry a `String` — never an instance of the type — and is rejected
+with a `SecurityException` rather than silently honoured or silently ignored
+(fail closed, with a diagnostic). The opt-out therefore cannot be flipped by
+ops tooling, configuration management, or the command line; it requires Java
+code written against the type. This mirrors the library's existing typed-env
+pattern (`jmx.remote.tls.socket.factory`, `JMXConnectorServer.AUTHENTICATOR`).
+
+**Crucially, relaxing the transport does not remove the principal control.**
+The default-deny serialization allow-list is applied to every wire
+deserialization *regardless of profile* — a plaintext client still gets the
+full deser filter on the data it receives. What a plaintext or non-SASL client
+gives up is **confidentiality and peer authentication of the channel**
+(sniffing, MITM, talking to an impostor endpoint), which is exactly the risk
+the operator is explicitly accepting for that connection. The
+`JMXConnectorServer` side is **unaffected** by any of this and remains
+unconditionally `TLS SASL/PLAIN` + `JMXAuthenticator`.
 
 ## Hardening checklist for deployers
 

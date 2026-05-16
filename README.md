@@ -20,9 +20,12 @@ implementation. The public OpenDMK API under `javax.management.remote.*` is
 - **JPMS-modular on Java 21.** Three real modules with a strict
   `client → common`, `server → common` dependency direction — no
   split packages, no automatic-module guesswork.
-- **Security is mandatory and single-shape.** Exactly
-  `TLS SASL/PLAIN`, with a required `JMXAuthenticator`. No plaintext,
-  no other SASL mechanisms, no escape hatch.
+- **Security is mandatory on the server, secure-by-default on the client.**
+  The server is exactly `TLS SASL/PLAIN` with a required `JMXAuthenticator` —
+  no plaintext, no other SASL mechanisms, no escape hatch. The client enforces
+  the same set by default, with a typed, **code-only** opt-out
+  (`ClientProfilePolicy`) for reaching legacy/plaintext endpoints — never
+  settable via a system property or the command line.
 - **Drop-in API.** `javax.management.remote.{jmxmp,generic,message}` is
   byte-for-byte the OpenDMK public surface (verified each build against a
   1.5.0 snapshot).
@@ -88,9 +91,9 @@ Then depend on the scenario you need (`groupId` `com.druvu`, version
 **Both sides** (in-process loopback, tooling that does client *and* server) —
 declare both `-client` and `-server`; each transitively brings `-common`.
 
-## Security (mandatory)
+## Security
 
-This build accepts **exactly one** profile set:
+By default this build accepts **exactly one** profile set:
 `jmx.remote.profiles = "TLS SASL/PLAIN"`. Anything else fails fast:
 
 - no `jmx.remote.profiles` → `IllegalArgumentException` at construction
@@ -98,8 +101,12 @@ This build accepts **exactly one** profile set:
   (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER) → `SecurityException`
 - a server without a `JMXAuthenticator` → rejected at construction
 
-This is **wire-incompatible** with legacy plaintext OpenDMK peers and with
-peers using any other SASL mechanism. That is intentional.
+On the **server** this is absolute — there is no escape hatch. On the
+**client** it is the secure *default*: a typed, code-only `ClientProfilePolicy`
+(below) lets an operator deliberately connect to legacy/plaintext endpoints.
+With the default in force this is **wire-incompatible** with legacy plaintext
+OpenDMK peers and with peers using any other SASL mechanism. That is
+intentional.
 
 ### Configuration
 
@@ -143,6 +150,49 @@ env.put("jmx.remote.tls.enabled.protocols", "TLSv1.3 TLSv1.2");
 
 An explicit value overrides the default verbatim; this is the only way to
 re-enable TLS 1.2 or older.
+
+### Client profile policy (connecting to legacy / plaintext endpoints)
+
+A JMX **client** often has to reach existing endpoints it does not control —
+including plaintext or TLS-only ones. The server is unconditionally locked to
+`TLS SASL/PLAIN`, but the client default is relaxable through a typed,
+**code-only** opt-out: `ClientProfilePolicy`, supplied under
+`ClientProfilePolicy.ENV_KEY`. Only a real `ClientProfilePolicy` instance
+relaxes it — a string under that key (e.g. from a `-D` property) is rejected,
+so the opt-out can never be flipped by ops tooling or the command line.
+
+```java
+import com.druvu.jmxmp.shared.ClientProfilePolicy;
+
+// 1. Default — supply nothing. Client requires exactly TLS SASL/PLAIN.
+Map<String, Object> env = new HashMap<>();
+env.put("jmx.remote.profiles", "TLS SASL/PLAIN");
+env.put("jmx.remote.tls.socket.factory", sslContext.getSocketFactory());
+env.put(JMXConnector.CREDENTIALS, new String[] {"alice", "s3cr3t"});
+
+// 2. Plaintext / anything — no client-side profile enforcement at all.
+Map<String, Object> env = new HashMap<>();
+env.put(ClientProfilePolicy.ENV_KEY, ClientProfilePolicy.unrestricted());
+// no jmx.remote.profiles needed → connects to a plaintext JMXMP endpoint
+JMXConnectorFactory.connect(new JMXServiceURL("jmxmp", host, 5555), env);
+
+// 3. TLS-only (no SASL) — pin an exact alternate set.
+Map<String, Object> env = new HashMap<>();
+env.put(ClientProfilePolicy.ENV_KEY, ClientProfilePolicy.require("TLS"));
+env.put("jmx.remote.profiles", "TLS");
+env.put("jmx.remote.tls.socket.factory", sslContext.getSocketFactory());
+
+// 4. A custom set, e.g. TLS + an alternate SASL mechanism the peer requires.
+env.put(ClientProfilePolicy.ENV_KEY,
+        ClientProfilePolicy.require("TLS", "SASL/DIGEST-MD5"));
+env.put("jmx.remote.profiles", "TLS SASL/DIGEST-MD5");
+```
+
+`unrestricted()` accepts any profile set including none; `require(...)` accepts
+**exactly** the enumerated set (order-independent, case-insensitive) and pairs
+with a matching `jmx.remote.profiles`. This relaxes only the transport
+negotiation — the default-deny serialization allow-list still guards the
+client receive path regardless of profile. It has **no effect on the server**.
 
 For a deliberately unauthenticated deployment, use the shipped
 `AllowAnyAuthenticator` — which itself refuses to construct unless you
@@ -199,8 +249,10 @@ JVM filter can only tighten it, never loosen it. See
 - Public `javax.management.remote.*` API: **unchanged** (frozen, verified).
 - Internal `com.sun.jmx.remote.*` packages renamed to `com.druvu.jmxmp.*` —
   only consumers of *internal* classes must update imports.
-- Security is mandatory and single-shape (above) — the one behavioral break
-  for public-API users; set `jmx.remote.profiles` accordingly.
+- Security is mandatory and single-shape on the server, secure-by-default on
+  the client (above) — the one behavioral break for public-API users; set
+  `jmx.remote.profiles` accordingly, or use a code-only `ClientProfilePolicy`
+  on the client to reach legacy/plaintext endpoints. The server has no opt-out.
 - TLS now defaults to **`TLSv1.3` only** (OpenDMK inherited the JDK default,
   which still permits TLS 1.2). Set `jmx.remote.tls.enabled.protocols` on both
   ends to talk to a non-1.3 peer.

@@ -83,9 +83,9 @@ public class GenericConnector implements JMXConnector, Serializable {
             this.env = Collections.EMPTY_MAP;
         } else {
             this.env = Collections.unmodifiableMap(env);
-            // Mandatory policy (2.0): explicit env must specify exactly
-            // jmx.remote.profiles="TLS SASL/PLAIN".
-            CheckProfiles.enforceSpec((String) env.get("jmx.remote.profiles"), env);
+            // Secure-default client policy (2.0): exactly "TLS SASL/PLAIN"
+            // unless a ClientProfilePolicy is supplied programmatically.
+            CheckProfiles.enforceClientSpec((String) env.get("jmx.remote.profiles"), env);
         }
         connectionBroadcaster = new NotificationBroadcasterSupport();
     }
@@ -103,9 +103,10 @@ public class GenericConnector implements JMXConnector, Serializable {
             if (env != null) {
                 merged.putAll(env);
             }
-            // Mandatory policy (2.0), unconditional client gate. Holds even
-            // for subclasses that bypass the constructor or override connect().
-            CheckProfiles.enforceSpec((String) merged.get("jmx.remote.profiles"), merged);
+            // Secure-default client gate (2.0). Holds even for subclasses that
+            // bypass the constructor or override connect(); a ClientProfilePolicy
+            // in the env (code-only) is the sole way to relax it.
+            CheckProfiles.enforceClientSpec((String) merged.get("jmx.remote.profiles"), merged);
 
             if (connectionBroadcaster == null) {
                 connectionBroadcaster = new NotificationBroadcasterSupport();

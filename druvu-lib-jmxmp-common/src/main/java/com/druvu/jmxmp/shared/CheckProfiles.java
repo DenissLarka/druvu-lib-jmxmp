@@ -58,15 +58,23 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Mandatory, single-shape JMXMP security policy (2.0).
+ * JMXMP security policy (2.0).
  *
- * <p>A negotiated profile set is accepted <strong>iff</strong> it is exactly {@code {TLS, SASL/PLAIN}}
+ * <p><b>Server side — mandatory, single-shape, no escape hatch.</b> {@link #enforce(List, Map)} /
+ * {@link #enforceSpec(String, Map)} accept a profile set <strong>iff</strong> it is exactly {@code {TLS, SASL/PLAIN}}
  * (order-independent, no other entries). Any other combination — empty, plaintext-only, TLS-only, SASL-only, an
  * alternate SASL mechanism (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER, …), or an extra entry beyond the
- * allowed set — is rejected with an explicit message naming the offending set.
+ * allowed set — is rejected with an explicit message naming the offending set. These are <strong>not</strong>
+ * user-overridable; no environment property bypasses them. They are called from the server gates only.
  *
- * <p>This policy is <strong>not</strong> user-overridable: it replaces the former swappable {@code CheckProfiles}
- * predicate. No environment property bypasses {@link #enforce(List, Map)}.
+ * <p><b>Client side — secure by default, typed-API escape hatch.</b> {@link #enforceClient(List, Map)} /
+ * {@link #enforceClientSpec(String, Map)} apply the same {@code {TLS, SASL/PLAIN}} default, but honour a
+ * {@link ClientProfilePolicy} instance supplied under {@link ClientProfilePolicy#ENV_KEY}: {@code unrestricted()}
+ * disables client enforcement entirely, {@code require(...)} pins an exact alternate set. The opt-out is reachable only
+ * from code that constructs a {@code ClientProfilePolicy} — a {@code String} (or anything else) under that key is
+ * rejected, never silently honoured or ignored — so it cannot be flipped via a system property, properties file, or the
+ * command line. The threat model is deliberately asymmetric: a server must not be relaxable (it would expose a weak
+ * inbound listener), an outbound client connection is the operator's own informed choice.
  */
 public final class CheckProfiles {
 
@@ -107,6 +115,77 @@ public final class CheckProfiles {
             throw new SecurityException("JMXMP supports exactly { TLS, SASL/PLAIN } in this build. Got: " + got
                     + ". Other SASL mechanisms (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER)"
                     + " are not supported.");
+        }
+    }
+
+    /**
+     * Resolve the client-side policy from the env map. Absent → the secure default. Present and a
+     * {@link ClientProfilePolicy} → that policy. Present and anything else (e.g. a {@code String} injected via a system
+     * property) → {@link SecurityException}: the opt-out is code-only by design and a non-typed value here is a
+     * misconfiguration, not a silent relaxation and not a silent ignore (fail closed, with a diagnostic).
+     */
+    private static ClientProfilePolicy resolveClientPolicy(Map<String, ?> env) {
+        Object v = (env == null) ? null : env.get(ClientProfilePolicy.ENV_KEY);
+        if (v == null) {
+            return ClientProfilePolicy.mandatoryTlsSasl();
+        }
+        if (v instanceof ClientProfilePolicy p) {
+            return p;
+        }
+        throw new SecurityException("'" + ClientProfilePolicy.ENV_KEY + "' must be a "
+                + ClientProfilePolicy.class.getName() + " instance set programmatically; got "
+                + v.getClass().getName() + ". The client transport-security policy cannot be relaxed via a system"
+                + " property, properties file, or string env entry.");
+    }
+
+    /**
+     * Client counterpart of {@link #enforceSpec(String, Map)} (the early, fail-fast check at connector construction /
+     * {@code connect()}). Applies {@link ClientProfilePolicy}: {@code unrestricted()} → no-op; default → identical to
+     * {@link #enforceSpec(String, Map)}; {@code require(set)} → {@code spec} must be exactly that set.
+     *
+     * @param spec the raw whitespace-separated {@code jmx.remote.profiles} spec, or {@code null}
+     * @param env the connector environment (carries the optional {@link ClientProfilePolicy})
+     */
+    public static void enforceClientSpec(String spec, Map<String, ?> env) {
+        ClientProfilePolicy policy = resolveClientPolicy(env);
+        if (policy.isUnrestricted()) {
+            return;
+        }
+        if (policy.isMandatoryTlsSasl()) {
+            enforceSpec(spec, env);
+            return;
+        }
+        // require(set): spec must be configured and match exactly.
+        if (spec == null || spec.isBlank()) {
+            throw new IllegalArgumentException("Client profile policy requires jmx.remote.profiles=\""
+                    + String.join(" ", policy.requiredSet()) + "\"");
+        }
+        enforceClient(Arrays.asList(spec.trim().split("\\s+")), env);
+    }
+
+    /**
+     * Client counterpart of {@link #enforce(List, Map)} (the post-negotiation check on the actual negotiated profile
+     * set). Applies {@link ClientProfilePolicy}: {@code unrestricted()} → no-op; default → identical to
+     * {@link #enforce(List, Map)}; {@code require(set)} → the negotiated set must equal that set exactly.
+     *
+     * @param profiles the negotiated / configured profile names
+     * @param env the connector environment (carries the optional {@link ClientProfilePolicy})
+     */
+    public static void enforceClient(List<String> profiles, Map<String, ?> env) {
+        ClientProfilePolicy policy = resolveClientPolicy(env);
+        if (policy.isUnrestricted()) {
+            return;
+        }
+        if (policy.isMandatoryTlsSasl()) {
+            enforce(profiles, env);
+            return;
+        }
+        Set<String> got = (profiles == null)
+                ? Set.of()
+                : profiles.stream().map(p -> p.toUpperCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
+        if (!got.equals(policy.requiredSet())) {
+            throw new SecurityException(
+                    "Client profile policy requires exactly " + policy.requiredSet() + ". Got: " + got + ".");
         }
     }
 }
