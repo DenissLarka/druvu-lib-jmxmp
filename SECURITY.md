@@ -107,7 +107,7 @@ What bounds it in this fork:
   very first handshake message, *pre-authentication*) and the MBean
   payload stream. It allows only the JMX object model, the JMXMP message
   types, authentication value types, and safe JDK value types
-  (`java.lang/util/math/time/net`); **everything else is rejected**. The
+  (`java.lang/util/math/time`); **everything else is rejected**. The
   classic deserialization gadget sinks (commons-collections,
   `com.sun.rowset.JdbcRowSetImpl`, Xalan `TemplatesImpl`, `sun.*`,
   `javassist`, `bsh`, …) fall outside the allow-list and are refused. It
