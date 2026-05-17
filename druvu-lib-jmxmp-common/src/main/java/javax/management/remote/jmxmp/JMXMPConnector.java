@@ -50,8 +50,6 @@
 
 package javax.management.remote.jmxmp;
 
-import com.druvu.jmxmp.shared.*;
-import com.druvu.jmxmp.util.*;
 import com.druvu.jmxmp.util.EnvHelp;
 import java.io.IOException;
 import java.io.Serializable;

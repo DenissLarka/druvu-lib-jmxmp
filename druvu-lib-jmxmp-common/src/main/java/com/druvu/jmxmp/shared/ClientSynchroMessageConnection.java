@@ -51,7 +51,6 @@
 package com.druvu.jmxmp.shared;
 
 import java.io.IOException;
-import javax.management.remote.generic.*;
 import javax.management.remote.message.*;
 
 public interface ClientSynchroMessageConnection extends SynchroMessageConnection {

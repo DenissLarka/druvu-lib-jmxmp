@@ -50,8 +50,6 @@
 
 package com.druvu.jmxmp.server.protocol.jmxmp;
 
-import com.druvu.jmxmp.shared.*;
-import com.druvu.jmxmp.util.*;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.Map;

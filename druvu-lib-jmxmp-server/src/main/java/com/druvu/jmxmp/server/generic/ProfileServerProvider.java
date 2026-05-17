@@ -50,9 +50,9 @@
 
 package com.druvu.jmxmp.server.generic;
 
-import com.druvu.jmxmp.shared.*;
-import com.druvu.jmxmp.util.*;
 import java.util.Map;
+
+import com.druvu.jmxmp.shared.ProfileProviderException;
 
 /**
  * A provider for creating profiles given a profile name. Instances of this interface are created by

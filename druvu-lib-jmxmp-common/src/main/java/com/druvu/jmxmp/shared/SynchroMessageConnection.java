@@ -52,7 +52,6 @@ package com.druvu.jmxmp.shared;
 
 import java.io.IOException;
 import java.util.Map;
-import javax.management.remote.generic.*;
 import javax.management.remote.message.*;
 
 /** This interface specifies a set of common methods for sychronized connection between a client and a server. */

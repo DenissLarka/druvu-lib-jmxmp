@@ -50,7 +50,6 @@
 
 package com.druvu.jmxmp.shared;
 
-import javax.management.remote.generic.*;
 import javax.management.remote.message.Message;
 
 /** This interface specifies methods to call back a server to execute a remote request. */

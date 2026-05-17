@@ -50,8 +50,6 @@
 
 package com.druvu.jmxmp.shared;
 
-import javax.management.remote.generic.*;
-import javax.management.remote.message.*;
 import javax.security.auth.Subject;
 
 public interface ServerSynchroMessageConnection extends SynchroMessageConnection {

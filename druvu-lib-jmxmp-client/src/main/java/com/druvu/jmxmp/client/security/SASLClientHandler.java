@@ -51,9 +51,9 @@
 package com.druvu.jmxmp.client.security;
 
 import com.druvu.jmxmp.client.generic.ProfileClient;
-import com.druvu.jmxmp.shared.*;
+import com.druvu.jmxmp.shared.SASLInputStream;
+import com.druvu.jmxmp.shared.SASLOutputStream;
 import com.druvu.jmxmp.shared.SocketConnectionIf;
-import com.druvu.jmxmp.util.*;
 import com.druvu.jmxmp.util.ClassLogger;
 import java.io.IOException;
 import java.net.Socket;
@@ -215,7 +215,7 @@ public class SASLClientHandler implements ProfileClient {
     }
 
     public void activate() throws IOException {
-        // If negotiated integrity or privacy
+        // If negotiated, integrity or privacy
         //
         String qop = (String) saslClnt.getNegotiatedProperty(Sasl.QOP);
         if (qop != null && (qop.equalsIgnoreCase("auth-int") || qop.equalsIgnoreCase("auth-conf"))) {
@@ -246,7 +246,7 @@ public class SASLClientHandler implements ProfileClient {
     not to hold on to the password any longer than we have to, so
     that if someone can snoop our memory (perhaps by examining a
     core dump or the like) they can't fish out passwords.  This
-    probably isn't very successful, because the password is there
+    probably isn't very successful because the password is there
     in the user's Map for at least as long as the handshake
     sequence lasts, and maybe for the entire lifetime of the
     connection.  */

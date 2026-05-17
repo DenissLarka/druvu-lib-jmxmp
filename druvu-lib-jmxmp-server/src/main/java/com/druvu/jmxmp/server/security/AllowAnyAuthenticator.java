@@ -8,8 +8,6 @@
 
 package com.druvu.jmxmp.server.security;
 
-import com.druvu.jmxmp.shared.*;
-import com.druvu.jmxmp.util.*;
 import java.util.Map;
 import java.util.Set;
 import javax.management.remote.JMXAuthenticator;

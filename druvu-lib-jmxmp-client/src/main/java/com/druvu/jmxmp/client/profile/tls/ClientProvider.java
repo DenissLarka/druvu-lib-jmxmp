@@ -53,9 +53,7 @@ package com.druvu.jmxmp.client.profile.tls;
 import com.druvu.jmxmp.client.generic.ProfileClient;
 import com.druvu.jmxmp.client.generic.ProfileClientProvider;
 import com.druvu.jmxmp.client.security.TLSClientHandler;
-import com.druvu.jmxmp.shared.*;
 import com.druvu.jmxmp.shared.ProfileProviderException;
-import com.druvu.jmxmp.util.*;
 import java.util.Map;
 
 public class ClientProvider implements ProfileClientProvider {

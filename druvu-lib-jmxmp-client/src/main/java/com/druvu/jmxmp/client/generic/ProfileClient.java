@@ -50,8 +50,6 @@
 
 package com.druvu.jmxmp.client.generic;
 
-import com.druvu.jmxmp.shared.*;
-import com.druvu.jmxmp.util.*;
 import java.io.IOException;
 import javax.management.remote.generic.MessageConnection;
 import javax.management.remote.message.ProfileMessage;

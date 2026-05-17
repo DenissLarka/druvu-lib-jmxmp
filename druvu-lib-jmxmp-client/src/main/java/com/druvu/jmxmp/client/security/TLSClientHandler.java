@@ -51,9 +51,7 @@
 package com.druvu.jmxmp.client.security;
 
 import com.druvu.jmxmp.client.generic.ProfileClient;
-import com.druvu.jmxmp.shared.*;
 import com.druvu.jmxmp.shared.SocketConnectionIf;
-import com.druvu.jmxmp.util.*;
 import com.druvu.jmxmp.util.ClassLogger;
 import java.io.IOException;
 import java.net.Socket;

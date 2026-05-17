@@ -53,9 +53,7 @@ package com.druvu.jmxmp.client.profile.sasl;
 import com.druvu.jmxmp.client.generic.ProfileClient;
 import com.druvu.jmxmp.client.generic.ProfileClientProvider;
 import com.druvu.jmxmp.client.security.SASLClientHandler;
-import com.druvu.jmxmp.shared.*;
 import com.druvu.jmxmp.shared.ProfileProviderException;
-import com.druvu.jmxmp.util.*;
 import java.util.Map;
 
 public class ClientProvider implements ProfileClientProvider {

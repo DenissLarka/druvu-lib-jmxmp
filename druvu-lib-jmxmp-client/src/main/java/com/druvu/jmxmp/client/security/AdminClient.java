@@ -52,12 +52,10 @@ package com.druvu.jmxmp.client.security;
 
 import com.druvu.jmxmp.client.generic.ProfileClient;
 import com.druvu.jmxmp.client.generic.ProfileClientFactory;
-import com.druvu.jmxmp.shared.*;
 import com.druvu.jmxmp.shared.CheckProfiles;
 import com.druvu.jmxmp.shared.ClientAdmin;
 import com.druvu.jmxmp.shared.HandshakeErrors;
 import com.druvu.jmxmp.shared.SelectProfiles;
-import com.druvu.jmxmp.util.*;
 import com.druvu.jmxmp.util.ClassLogger;
 import java.io.IOException;
 import java.util.ArrayList;

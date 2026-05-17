@@ -51,9 +51,11 @@
 package com.druvu.jmxmp.client.generic;
 
 import com.druvu.jmxmp.client.security.AdminClient;
-import com.druvu.jmxmp.shared.*;
+import com.druvu.jmxmp.shared.ClientAdmin;
+import com.druvu.jmxmp.shared.ClientSynchroMessageConnection;
 import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.util.*;
+import com.druvu.jmxmp.shared.ServerAdmin;
+import com.druvu.jmxmp.shared.SynchroCallback;
 import com.druvu.jmxmp.util.ClassLogger;
 import com.druvu.jmxmp.util.ThreadService;
 import java.io.IOException;
@@ -61,9 +63,14 @@ import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import javax.management.remote.generic.*;
 import javax.management.remote.generic.ConnectionClosedException;
-import javax.management.remote.message.*;
+import javax.management.remote.generic.MessageConnection;
+import javax.management.remote.message.CloseMessage;
+import javax.management.remote.message.MBeanServerRequestMessage;
+import javax.management.remote.message.MBeanServerResponseMessage;
+import javax.management.remote.message.Message;
+import javax.management.remote.message.NotificationRequestMessage;
+import javax.management.remote.message.NotificationResponseMessage;
 import javax.security.auth.Subject;
 
 public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageConnection {
@@ -321,8 +328,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
 
                     retried = true;
 
-                    continue;
-                } else {
+				} else {
                     throw new IOException("Got wrong response: " + mwrapper.msg);
                 }
             }
@@ -644,7 +650,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
 
     /**
      * Maps message id to ResponseMsgWrapper, locked at itself when the map is updated. A ResponseMsgWrapper is used to
-     * wait for response for given request. Sychronizing on it to do wait/notify
+     * wait for a response for a given request. Sychronizing on it to do wait/notify
      */
     private transient HashMap waitingList = new HashMap();
 
@@ -652,7 +658,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
     private transient Message notifResp = null;
 
     /**
-     * Controls access to notifResp field; used in wait/notify so waiting thread can be informed when a notifResp is
+     * Controls access to notifResp field; used in wait/notify so the waiting thread can be informed when a notifResp is
      * set.
      */
     private final transient int[] notifLock = new int[0];
