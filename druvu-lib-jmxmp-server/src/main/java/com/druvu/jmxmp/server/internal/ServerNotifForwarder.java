@@ -52,19 +52,14 @@ import com.druvu.jmxmp.util.*;
 import com.druvu.jmxmp.util.ClassLogger;
 import com.druvu.jmxmp.util.EnvHelp;
 import java.io.IOException;
-import java.security.AccessControlContext;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import javax.management.InstanceNotFoundException;
 import javax.management.ListenerNotFoundException;
-import javax.management.MBeanPermission;
 import javax.management.MBeanServer;
 import javax.management.NotificationBroadcaster;
 import javax.management.NotificationFilter;
-import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.management.remote.NotificationResult;
 import javax.management.remote.TargetedNotification;
@@ -88,10 +83,6 @@ public class ServerNotifForwarder {
 
         checkState();
 
-        // Explicitly check MBeanPermission for addNotificationListener
-        //
-        checkMBeanPermission(name, "addNotificationListener");
-
         Boolean instanceOf = mbeanServer.isInstanceOf(name, broadcasterClass);
 
         if (!instanceOf.booleanValue()) {
@@ -114,10 +105,6 @@ public class ServerNotifForwarder {
         }
 
         checkState();
-
-        // Explicitly check MBeanPermission for removeNotificationListener
-        //
-        checkMBeanPermission(name, "removeNotificationListener");
 
         Exception re = null;
         for (int i = 0; i < listenerIDs.length; i++) {
@@ -221,28 +208,6 @@ public class ServerNotifForwarder {
         synchronized (listenerCounterLock) {
             return new Integer(listenerCounter++);
         }
-    }
-
-    /** Explicitly check the MBeanPermission for the current access control context. */
-    private void checkMBeanPermission(final ObjectName name, final String actions)
-            throws InstanceNotFoundException, SecurityException {
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null) {
-            AccessControlContext acc = AccessController.getContext();
-            ObjectInstance oi = mbeanServer.getObjectInstance(name);
-
-            String classname = oi.getClassName();
-            MBeanPermission perm = new MBeanPermission(classname, null, name, actions);
-            sm.checkPermission(perm, acc);
-        }
-    }
-
-    /** Iterate until we extract the real exception from a stack of PrivilegedActionExceptions. */
-    private static Exception extractException(Exception e) {
-        while (e instanceof PrivilegedActionException) {
-            e = ((PrivilegedActionException) e).getException();
-        }
-        return e;
     }
 
     // ------------------

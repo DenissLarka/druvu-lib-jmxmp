@@ -13,7 +13,7 @@ package com.druvu.jmxmp.server.generic;
 
 import com.druvu.jmxmp.shared.ArrayNotificationBuffer;
 import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.MBeanServerFileAccessController;
+import com.druvu.jmxmp.shared.JmxmpAccessControl;
 import com.druvu.jmxmp.shared.NotificationBuffer;
 import com.druvu.jmxmp.shared.ObjectWrappingImpl;
 import com.druvu.jmxmp.shared.ServerSynchroMessageConnection;
@@ -100,15 +100,22 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
             }
 
             if (env != null) {
-                String accessFile = (String) env.get("jmx.remote.x.access.file");
-                if (accessFile != null) {
-                    MBeanServerForwarder mbsf;
-                    try {
-                        mbsf = new MBeanServerFileAccessController(accessFile);
-                    } catch (IOException e) {
-                        throw new IllegalArgumentException(e.getMessage(), e);
+                // PLAN-2.0.0 §7.6/§7.7: authorization is opt-in via a typed,
+                // code-only JmxmpAccessControl under ENV_KEY. Absent ⇒ no
+                // forwarder installed (authenticated-but-unrestricted; authn is
+                // already mandatory). A non-JmxmpAccessControl value (e.g. a
+                // String from -D/props) ⇒ fail CLOSED at server start, so the
+                // code-only guarantee is enforced, not merely documented. The
+                // legacy "jmx.remote.x.access.file" properties mechanism is
+                // gone (MBeanServerFileAccessController hard-deleted).
+                Object acValue = env.get(JmxmpAccessControl.ENV_KEY);
+                if (acValue != null) {
+                    if (!(acValue instanceof JmxmpAccessControl accessControl)) {
+                        throw new SecurityException(JmxmpAccessControl.ENV_KEY
+                                + " must be a code-supplied JmxmpAccessControl instance, but was "
+                                + acValue.getClass().getName());
                     }
-                    facade.setMBeanServerForwarder(mbsf);
+                    facade.setMBeanServerForwarder(new AccessControlledMBeanServer(accessControl));
                     mbs = facade.getMBeanServer();
                 }
             }

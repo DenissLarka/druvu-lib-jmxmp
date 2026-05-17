@@ -406,7 +406,6 @@ public class EnvHelp {
             + "jmx.remote.rmi.server.socket.factory "
             + "jmx.remote.sasl.callback.handler "
             + "jmx.remote.tls.socket.factory "
-            + "jmx.remote.x.access.file "
             + "jmx.remote.x.password.file ";
 
     private static final SortedSet defaultHiddenStrings = new TreeSet();

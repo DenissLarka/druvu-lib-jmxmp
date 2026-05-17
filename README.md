@@ -30,6 +30,43 @@ implementation. The public OpenDMK API under `javax.management.remote.*` is
   byte-for-byte the OpenDMK public surface (verified each build against a
   1.5.0 snapshot).
 
+## Modern Java security (and a fixed auth-bypass)
+
+**This fork fixes a silent authorization bypass that affects OpenDMK and every
+known republication on current Java.** OpenDMK's bundled file access controller
+reads the caller identity with `Subject.getSubject(AccessController.getContext())`
+and treats a `null` subject as *"security is not enabled — allow every
+operation"*. The Security Manager has been disabled by default since JDK 18 and
+**removed permanently** by JEP 486 (JDK 24), so on JDK 24/25 that read is
+*always* `null` — meaning **OpenDMK and its republications silently authorize
+every operation** the moment they run on a current JDK. This fork reads identity
+via `Subject.current()` and **fails closed**: no authenticated subject ⇒ access
+denied, never allow-all. It is pinned by a permanent regression test that runs
+on **JDK 21 *and* 25**.
+
+Beyond that one fix, the model is built for the post-Security-Manager platform:
+
+- **Works on current Java.** OpenDMK and the four republications depend on the
+  Security Manager (removed by JEP 486); they are effectively broken on JDK 25.
+  This fork targets **JDK 21–25+**.
+- **No deprecated machinery.** No `SecurityManager`, no
+  `AccessController`/`doPrivileged`, no `--enable-…` flags, no
+  deprecation-for-removal warnings. Identity propagates through the JDK's own
+  sanctioned `Subject.current()` / `Subject.callAs`.
+- **A real authorization model, in code.** A typed, **default-deny**
+  `JmxmpAccessControl` SPI with a built-in role / `ObjectName`-pattern policy
+  (`JmxmpAccessControl.policy()`) restores the per-operation control the removed
+  `MBeanPermission` system used to give, and replaces OpenDMK's 2007
+  `username=readonly|readwrite` properties file. The open-server opt-out
+  (`JmxmpAccessControl.allowAll()`) is a typed, code-only sentinel — it can
+  never be flipped by a system property, a config file, or the command line.
+- **Honest, bounded compatibility.** The wire/transport API stays byte-for-byte
+  OpenDMK (verified every build). The security-idiom change is the JDK forcing
+  every library's hand — not this fork breaking faith.
+
+See [`SECURITY.md`](SECURITY.md) for the threat model and the maintainer
+support scope.
+
 ## Module layout
 
 ```mermaid
@@ -151,6 +188,86 @@ env.put("jmx.remote.tls.enabled.protocols", "TLSv1.3 TLSv1.2");
 An explicit value overrides the default verbatim; this is the only way to
 re-enable TLS 1.2 or older.
 
+### Server security builder — `JmxmpServerSecurity` (recommended)
+
+The raw env map above works, but it is easy to ship a server that is missing
+TLS or the authenticator and only find out at connect time.
+`JmxmpServerSecurity` is a small, **pure-assembler** facade that produces the
+exact same env map — with the mandatory pieces enforced at **build time**, not
+as a runtime surprise. It is the server-side counterpart to the client's
+`ClientProfilePolicy`, and it is not a new connector API: you still call the
+unchanged `JMXMPConnectorServer` constructor with the map it returns, so the
+frozen `javax.management.remote.*` surface is untouched.
+
+**Hardened, authenticated server (no authorization → authenticated-but-unrestricted):**
+
+```java
+import com.druvu.jmxmp.shared.JmxmpServerSecurity;
+
+Map<String, Object> env = JmxmpServerSecurity.builder()
+        .tls(sslContext)                 // REQUIRED
+        .authenticator(myAuthenticator)  // REQUIRED
+        .build();                        // IllegalStateException if either is missing
+
+var url = new JMXServiceURL("jmxmp", "0.0.0.0", 5555);
+var server = JMXConnectorServerFactory.newJMXConnectorServer(url, env, mbeanServer);
+server.start();
+```
+
+**Hardened server + role-based authorization** (the part most deployments want
+— authentication says *who*, this says *what they may do*):
+
+```java
+import com.druvu.jmxmp.shared.JmxmpAccessControl;
+import static com.druvu.jmxmp.shared.JmxAction.*;
+
+JmxmpAccessControl policy = JmxmpAccessControl.policy()
+        .role("ro")
+            .allow(GET_ATTRIBUTE, "*")
+            .allow(GET_MBEAN_INFO, "*")
+            .allow(QUERY).allow(GET_DOMAINS)
+        .role("ops")
+            .inherit("ro")
+            .allow(INVOKE,        "com.acme:type=Cache,*")
+            .allow(SET_ATTRIBUTE, "com.acme:type=Cache,*")
+        .principal("svc-dashboard").grantedRoles("ro")
+        .principal("alice").grantedRoles("ops")
+        .build();   // fails fast: unknown/cyclic role, bad pattern, mis-ordered calls
+
+Map<String, Object> env = JmxmpServerSecurity.builder()
+        .tls(sslContext)
+        .authenticator(myAuthenticator)
+        .authorization(policy)           // strict default-deny once supplied
+        .build();
+```
+
+With a control supplied the server is **default-deny**: anything not
+explicitly granted is refused with a `SecurityException` before the call ever
+reaches the MBean. `svc-dashboard` can read and query; `alice` can also invoke
+and set on the cache MBeans; neither can do anything else.
+
+**Deliberately open (authentication only)** — the *only* route to an
+unrestricted server is an explicit, code-only sentinel; there is no config
+flag for it:
+
+```java
+.authorization(JmxmpAccessControl.allowAll())   // typed, code-only — never a property
+```
+
+**Advanced JSR-160 keys** go through `rawEnv` (last-wins). It is an escape
+hatch, not a back door: it **cannot set or unset a mandatory/typed key**
+(`jmx.remote.profiles`, the TLS factory, the authenticator, or the
+authorization key) — that fails at `build()`:
+
+```java
+.rawEnv("jmx.remote.x.notification.buffer.size", 2000)
+```
+
+Guarantees, by construction: `build()` throws `IllegalStateException` if TLS
+or the authenticator is absent; a non-`JmxmpAccessControl` value can never
+reach the authorization slot (so the open-server opt-out cannot be flipped by
+ops tooling); and the returned map is a fresh, caller-owned `HashMap`.
+
 ### Client profile policy (connecting to legacy / plaintext endpoints)
 
 A JMX **client** often has to reach existing endpoints it does not control —
@@ -253,6 +370,27 @@ JVM filter can only tighten it, never loosen it. See
   the client (above) — the one behavioral break for public-API users; set
   `jmx.remote.profiles` accordingly, or use a code-only `ClientProfilePolicy`
   on the client to reach legacy/plaintext endpoints. The server has no opt-out.
+- **Server-side caller identity is now `Subject.current()`**, not the
+  Security-Manager-era `Subject.getSubject(AccessController.getContext())`.
+  MBeans (or `JMXAuthenticator`s) that inspect the caller must use
+  `Subject.current()`; the old idiom returns `null` on JDK 24+ regardless of
+  this library. This is the platform's change (JEP 411/486), surfaced honestly
+  rather than papered over — see *Modern Java security* above.
+- **Authorization replaced, no shim.** OpenDMK's `MBeanServerFileAccessController`
+  and the `jmx.remote.x.access.file` properties mechanism are **removed**.
+  Authorization is now the typed, code-only `JmxmpAccessControl` SPI
+  (default-deny) with a built-in `JmxmpAccessControl.policy()` RBAC, supplied
+  under `JmxmpAccessControl.ENV_KEY` (or via the `JmxmpServerSecurity` builder).
+  No control configured ⇒ authenticated-but-unrestricted (authentication is
+  still mandatory); a non-`JmxmpAccessControl` value under the key ⇒
+  fail-closed at server start. Migration: express each legacy
+  `user=readonly|readwrite` line as `policy().role(...).principal(user)
+  .grantedRoles(...)` in code.
+- **Subject delegation removed.** This library does not support JMX subject
+  delegation. The frozen `javax.management.remote.*` delegation signatures
+  remain (drop-in compatibility), but a request carrying a delegation subject
+  is **rejected fail-closed** (`SecurityException`) — never silently run as the
+  authenticated user.
 - TLS now defaults to **`TLSv1.3` only** (OpenDMK inherited the JDK default,
   which still permits TLS 1.2). Set `jmx.remote.tls.enabled.protocols` on both
   ends to talk to a non-1.3 peer.

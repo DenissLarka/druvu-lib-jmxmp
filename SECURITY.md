@@ -22,6 +22,17 @@ This is maintained by a **single maintainer on a best-effort basis**. There is
   guaranteed within any fixed window.
 - The project may be declared end-of-life with a notice in this file and the
   README. If that happens, treat the last release as frozen and unmaintained.
+- The 2.0.0 **authorization layer** (`JmxmpAccessControl` SPI, the built-in
+  `policy()` RBAC, the `MBeanServerForwarder` enforcement path) and the
+  `Subject.current()` propagation change are **new code in a
+  security-critical position**, provided **as-is** and **not formally
+  verified**. A defect in an authorization path is by nature a
+  privilege-escalation / bypass class of issue. You are responsible for
+  threat-modelling the policy you configure (role grants, `ObjectName`
+  patterns) and for **penetration-testing the deployment before exposing it
+  to peers you do not fully trust**. The single-maintainer, best-effort,
+  latest-version-only model stated here applies to this layer too — it is a
+  hardened design, not an audited authorization product.
 
 If your deployment needs a contractual security SLA, do not rely on this
 library — vendor it, audit it yourself, and own the maintenance.
@@ -95,6 +106,21 @@ flipped by a system property, properties file, or the command line.
   public `javax.management.remote.*` API and the SPI are reachable. A
   client-only deployment does not carry the server accept loop, and vice
   versa.
+- **Authorization fail-open eliminated.** Upstream OpenDMK's bundled file
+  access controller reads the caller via
+  `Subject.getSubject(AccessController.getContext())` and treats a `null`
+  subject as *"security not enabled — allow every operation"*. The Security
+  Manager is disabled by default since JDK 18 and **removed** by JEP 486
+  (JDK 24), so that read is *always* `null` on a current JDK — upstream and
+  its republications therefore **silently authorize everything** on JDK 24/25.
+  This fork reads identity via `Subject.current()` (propagated by
+  `Subject.callAs`) and **fails closed** on an absent subject; the bypass is
+  structurally gone and is pinned by a **permanent regression test on JDK 21
+  and 25**. The 2007 `username=readonly|readwrite` file access controller is
+  deleted with no shim (replaced by the typed, code-only authorization SPI),
+  and JMX **subject delegation is removed** — a request carrying a delegation
+  subject is rejected fail-closed rather than silently run as the
+  authenticated user.
 
 ## What remains is — the residual attack surface
 
@@ -153,6 +179,37 @@ What it does **not** protect against:
   implementation. `AllowAnyAuthenticator` authenticates nobody — it exists for
   deliberately-open deployments and is gated behind an explicit acknowledgement
   for exactly that reason.
+
+### Authorization (opt-in, default-deny, deployer-defined)
+
+Authorization is layered **on top of mandatory authentication**, not instead
+of it.
+
+- **Default semantics.** No `JmxmpAccessControl` under
+  `JmxmpAccessControl.ENV_KEY` ⇒ *authenticated-but-unrestricted*: every
+  authenticated subject may perform every operation. This is the expected JMX
+  default and is **not** a fail-open — identity is real and entry is gated by
+  mandatory authentication. Supplying a control switches the server to
+  **strict default-deny**: anything not explicitly granted is refused, no
+  fall-through. `JmxmpAccessControl.allowAll()` is an explicit, **code-only**
+  "authenticated = unrestricted" sentinel; a non-typed value under the key is
+  rejected at server start (fail closed) — it cannot be flipped by a property,
+  file, or the command line (same typed-env guarantee as the client policy
+  below).
+- **The policy you write is deployer-owned surface.** The library enforces a
+  policy faithfully; it cannot tell you the policy is too broad. An over-wide
+  `ObjectName` pattern, an over-granted role, or `allowAll()` in production is
+  a deployer misconfiguration with the deployer's consequences — exactly like
+  the `JMXAuthenticator` and `SSLContext` you supply.
+- **An authenticated peer is trusted within its grants.** Authorization
+  constrains *which* operations a valid subject may perform; it does not make
+  deserialization of that subject's payloads risk-free (see *Java
+  deserialization* above). A compromised credentialed peer still operates
+  within whatever you granted it. Least-privilege grants reduce blast radius;
+  they do not remove the deserialization residual.
+- **New code, not audited.** The SPI dispatch, the built-in RBAC matching, and
+  the `MBeanServerForwarder` enforcement path are new in 2.0.0 and not
+  formally verified — see *Support model — read this first*.
 
 ### Client transport policy (the asymmetric, code-only opt-out)
 
@@ -221,12 +278,20 @@ unconditionally `TLS SASL/PLAIN` + `JMXAuthenticator`.
    to production. Consider the bearer-token-as-password pattern (treat the
    password slot as a short-lived OAuth/JWT or HMAC ticket — see the README)
    so a leaked credential is not a reusable secret.
-4. **Constrain the network.** Bind to a specific interface or a trusted
+4. **Configure authorization, least-privilege.** Authentication says *who*;
+   it does not say *what they may do*. Supply a `JmxmpAccessControl` — the
+   built-in `JmxmpAccessControl.policy()` RBAC or your own SPI — under
+   `JmxmpAccessControl.ENV_KEY`, or assemble the env with `JmxmpServerSecurity`.
+   Grant the **minimum** actions and `ObjectName` patterns each role needs;
+   keep patterns narrow; do not ship `JmxmpAccessControl.allowAll()` to
+   production. With a control configured the server is strict default-deny;
+   a non-typed value under the key fails closed at start.
+5. **Constrain the network.** Bind to a specific interface or a trusted
    network segment; do not expose the JMXMP port to untrusted networks even
    with auth enabled.
-5. **Least privilege.** Run the JVM with the minimum privileges and a security
+6. **Least privilege.** Run the JVM with the minimum privileges and a security
    posture appropriate to "this process deserializes peer-supplied data".
-6. **Stay on the latest version.** Only the latest release receives fixes.
+7. **Stay on the latest version.** Only the latest release receives fixes.
 
 ## Provenance
 
