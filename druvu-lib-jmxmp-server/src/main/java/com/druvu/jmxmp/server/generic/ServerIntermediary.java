@@ -52,10 +52,8 @@ package com.druvu.jmxmp.server.generic;
 
 import com.druvu.jmxmp.server.internal.ServerNotifForwarder;
 import com.druvu.jmxmp.shared.*;
-import com.druvu.jmxmp.shared.JMXSubjectDomainCombiner;
 import com.druvu.jmxmp.shared.ServerCommunicatorAdmin;
 import com.druvu.jmxmp.shared.ServerSynchroMessageConnection;
-import com.druvu.jmxmp.shared.SubjectDelegator;
 import com.druvu.jmxmp.shared.SynchroCallback;
 import com.druvu.jmxmp.util.*;
 import com.druvu.jmxmp.util.ClassLoaderWithRepository;
@@ -65,13 +63,11 @@ import com.druvu.jmxmp.util.OrderClassLoaders;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.NotSerializableException;
-import java.security.AccessControlContext;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionException;
 import javax.management.Attribute;
 import javax.management.AttributeList;
 import javax.management.InstanceNotFoundException;
@@ -128,13 +124,7 @@ public class ServerIntermediary {
         this.clientId = connection.getConnectionId();
         this.serialization = wrapper;
 
-        this.subjectDelegator = new SubjectDelegator();
         this.subject = subject;
-        if (subject == null) {
-            this.acc = null;
-        } else {
-            this.acc = new AccessControlContext(AccessController.getContext(), new JMXSubjectDomainCombiner(subject));
-        }
 
         this.defaultClassLoader = defaultClassLoader;
 
@@ -439,11 +429,7 @@ public class ServerIntermediary {
                         }
                     }
 
-                    if (e instanceof PrivilegedActionException) {
-                        e = extractException(e);
-                    }
-
-                    throw e;
+                    throw extractException(e);
                 }
 
             case MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_FILTER_HANDBACK:
@@ -637,20 +623,21 @@ public class ServerIntermediary {
                 logger.trace("RequestHandler-execute", "Receive a MBeanServerRequestMessage.");
             }
             try {
-                final AccessControlContext reqACC;
-                final Subject delegationSubject = req.getDelegationSubject();
-                if (delegationSubject == null) {
-                    reqACC = acc;
-                } else {
-                    if (subject == null) {
-                        final String msg = "Subject delegation cannot be enabled " + "unless an authenticated subject "
-                                + "is put in place";
-                        throw new SecurityException(msg);
-                    }
-                    reqACC = subjectDelegator.delegatedContext(acc, delegationSubject);
+                // Phase 1.2 (PLAN-2.0.0.md §8): subject delegation is NOT
+                // supported by this library (user decision 2026-05-17). The wire
+                // API still carries an optional delegation subject (frozen
+                // javax.management.remote.* surface — cannot be removed), so a
+                // client may still send one; the server rejects it fail-closed
+                // rather than silently running as the authenticated subject.
+                // Every request therefore runs as the SASL-authenticated subject
+                // via Subject.callAs (JDK 18+) — no AccessController /
+                // AccessControlContext / domain-combiner / delegation plumbing.
+                // Per-call authorization of the authenticated subject is the
+                // Phase 2 JmxmpAccessControl SPI's responsibility.
+                if (req.getDelegationSubject() != null) {
+                    throw new SecurityException("Subject delegation is not supported");
                 }
-
-                Object result = AccessController.doPrivileged(new PrivilegedRequestJob(req), reqACC);
+                Object result = Subject.callAs(subject, new RequestJob(req));
                 return new MBeanServerResponseMessage(req.getMessageId(), result, false);
             } catch (Exception e) {
                 e = extractException(e);
@@ -841,12 +828,12 @@ public class ServerIntermediary {
         }
     }
 
-    private class PrivilegedRequestJob implements PrivilegedExceptionAction {
-        public PrivilegedRequestJob(MBeanServerRequestMessage request) {
+    private class RequestJob implements Callable<Object> {
+        public RequestJob(MBeanServerRequestMessage request) {
             this.request = request;
         }
 
-        public Object run() throws Exception {
+        public Object call() throws Exception {
             return serialization.wrap(handleRequest(request));
         }
 
@@ -875,10 +862,10 @@ public class ServerIntermediary {
         return mbeanServer.getClassLoaderFor(name);
     }
 
-    /** Iterate until we extract the real exception from a stack of PrivilegedActionExceptions. */
+    /** Iterate until we extract the real exception from a stack of Subject.callAs CompletionExceptions. */
     private Exception extractException(Exception e) {
-        while (e instanceof PrivilegedActionException) {
-            e = ((PrivilegedActionException) e).getException();
+        while (e instanceof CompletionException && e.getCause() instanceof Exception) {
+            e = (Exception) e.getCause();
         }
         return e;
     }
@@ -900,9 +887,7 @@ public class ServerIntermediary {
     private final RequestHandler requestHandler = new RequestHandler();
 
     private final ObjectWrapping serialization;
-    private final AccessControlContext acc;
     private final Subject subject;
-    private final SubjectDelegator subjectDelegator;
     private final ClassLoader defaultClassLoader;
     private final ClassLoaderWithRepository clr;
 
