@@ -50,12 +50,11 @@
 
 package com.druvu.jmxmp.server.generic;
 
+import com.druvu.jmxmp.shared.ProfileProviderException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.StringTokenizer;
-
-import com.druvu.jmxmp.shared.ProfileProviderException;
 
 /**
  * Factory to create profiles. There are no instances of this class.
@@ -79,8 +78,8 @@ import com.druvu.jmxmp.shared.ProfileProviderException;
  *
  * <p>The provider package list is a string that is interpreted as a list of non-empty Java package names separated by
  * vertical bars (<code>|</code>). If the string is empty, then so is the provider package list. If the provider package
- * list is not a String, or if it contains an element that is an empty string, a {@link com.druvu.jmxmp.shared.ProfileProviderException} is
- * thrown.
+ * list is not a String, or if it contains an element that is an empty string, a
+ * {@link com.druvu.jmxmp.shared.ProfileProviderException} is thrown.
  *
  * <p>If the provider package list exists and is not empty, then for each element <code><em>pkg</em></code> of the list,
  * the factory will attempt to load the class
@@ -102,8 +101,10 @@ import com.druvu.jmxmp.shared.ProfileProviderException;
  * <p>If the attempt to load this class produces a {@link ClassNotFoundException}, the search for a provider continues
  * with the next element of the list.
  *
- * <p>Otherwise, a problem with the found provider is signalled by a {@link com.druvu.jmxmp.shared.ProfileProviderException} whose
- * {@link com.druvu.jmxmp.shared.ProfileProviderException#getCause() <em>cause</em>} indicates the underlying exception, as follows:
+ * <p>Otherwise, a problem with the found provider is signalled by a
+ * {@link com.druvu.jmxmp.shared.ProfileProviderException} whose
+ * {@link com.druvu.jmxmp.shared.ProfileProviderException#getCause() <em>cause</em>} indicates the underlying exception,
+ * as follows:
  *
  * <ul>
  *   <li>if the attempt to load the class produces an exception other than <code>ClassNotFoundException</code>, that is

@@ -46,12 +46,11 @@
 
 package com.druvu.jmxmp.client.internal;
 
+import com.druvu.jmxmp.shared.ListenerInfo;
 import javax.management.NotificationFilter;
 import javax.management.NotificationListener;
 import javax.management.ObjectName;
 import javax.security.auth.Subject;
-
-import com.druvu.jmxmp.shared.ListenerInfo;
 
 public class ClientListenerInfo extends ListenerInfo {
     public ClientListenerInfo(

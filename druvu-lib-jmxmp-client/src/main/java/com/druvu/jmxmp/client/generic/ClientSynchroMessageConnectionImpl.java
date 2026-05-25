@@ -328,7 +328,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
 
                     retried = true;
 
-				} else {
+                } else {
                     throw new IOException("Got wrong response: " + mwrapper.msg);
                 }
             }

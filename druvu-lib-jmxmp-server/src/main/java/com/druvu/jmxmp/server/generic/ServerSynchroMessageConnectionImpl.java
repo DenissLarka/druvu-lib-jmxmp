@@ -59,7 +59,6 @@ import com.druvu.jmxmp.util.ClassLogger;
 import com.druvu.jmxmp.util.ThreadService;
 import java.io.IOException;
 import java.util.Map;
-
 import javax.management.remote.generic.MessageConnection;
 import javax.management.remote.message.CloseMessage;
 import javax.management.remote.message.Message;
