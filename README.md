@@ -1,19 +1,23 @@
 # druvu-lib-jmxmp
 
+[![Maven Central](https://img.shields.io/maven-central/v/com.druvu/druvu-lib-jmxmp-common?label=Maven%20Central)](https://central.sonatype.com/artifact/com.druvu/druvu-lib-jmxmp-common)
+![Java](https://img.shields.io/badge/Java-21%2B-blue)
+[![License](https://img.shields.io/badge/license-GPLv2%2BCPE%20%2F%20CDDL--1.0-blue)](LICENSE)
+
 A modular, security-hardened **JMXMP** client/server library — the JSR-160
 "optional" connector (JMX over a plain socket, no RMI), re-modularized for the
 Java Platform Module System and locked to a single mandatory transport
-security profile.
+security profile. Historically distributed as **`jmxremote_optional`** /
+**`jmx-optional`** (OpenDMK).
 
 It is a maintained fork of the OpenDMK `jmx-optional` reference
 implementation. The public OpenDMK API under `javax.management.remote.*` is
 **FQN-frozen** — existing code that talks to `JMXMPConnector` /
 `JMXMPConnectorServer` via `JMXConnectorFactory` recompiles unchanged.
 
-> **Status: pre-release.** Not yet published to Maven Central. Build from
-> source (see below). The wire/security model below is a deliberate,
-> documented break from upstream OpenDMK — read [Security](#security-mandatory)
-> before adopting.
+> **On Maven Central** as of `2.0.0` (`com.druvu:druvu-lib-jmxmp-*`). The
+> wire/security model below is a deliberate, documented break from upstream
+> OpenDMK — read [Security](#security) before adopting.
 
 ## Why this fork
 
@@ -27,8 +31,8 @@ implementation. The public OpenDMK API under `javax.management.remote.*` is
   (`ClientProfilePolicy`) for reaching legacy/plaintext endpoints — never
   settable via a system property or the command line.
 - **Drop-in API.** `javax.management.remote.{jmxmp,generic,message}` is
-  byte-for-byte the OpenDMK public surface (verified each build against a
-  1.5.0 snapshot).
+  byte-for-byte the OpenDMK public surface (verified each build against the
+  frozen v1.5.0 API baseline).
 
 ## Modern Java security (and a fixed auth-bypass)
 
@@ -55,11 +59,13 @@ Beyond that one fix, the model is built for the post-Security-Manager platform:
   sanctioned `Subject.current()` / `Subject.callAs`.
 - **A real authorization model, in code.** A typed, **default-deny**
   `JmxmpAccessControl` SPI with a built-in role / `ObjectName`-pattern policy
-  (`JmxmpAccessControl.policy()`) restores the per-operation control the removed
-  `MBeanPermission` system used to give, and replaces OpenDMK's 2007
-  `username=readonly|readwrite` properties file. Authorization is by a coarse
-  verb set — `READ` / `WRITE` / `INVOKE` / `NOTIFY` — over an `ObjectName`
-  target. Remote MBean **lifecycle** (create / register / unregister /
+  (`JmxmpAccessControl.policy()`) provides **per-verb, per-target** authorization
+  in place of the removed `MBeanPermission` system and OpenDMK's 2007
+  `username=readonly|readwrite` properties file. Grants are a coarse verb set —
+  `READ` / `WRITE` / `INVOKE` / `NOTIFY` — over an `ObjectName` target; unlike
+  `MBeanPermission` it does **not** scope to individual operation or attribute
+  names (`INVOKE` on a target covers all of an MBean's operations). Remote MBean
+  **lifecycle** (create / register / unregister /
   instantiate) and the deprecated `deserialize` forms are **permanently
   denied**: there is no verb to grant them and `allowAll()` does not relax them,
   so a client can only ever act on MBeans that already exist. The open-server
@@ -99,16 +105,8 @@ deployment resolves with only its own module + `common` on the path.
 
 ## Adding the dependency
 
-Until a Maven Central release, build and install locally:
-
-```bash
-git clone https://github.com/DenissLarka/druvu-lib-jmxmp
-cd druvu-lib-jmxmp
-mvn -DskipTests install      # requires JDK 21
-```
-
-Then depend on the scenario you need (`groupId` `com.druvu`, version
-`1.5.0-SNAPSHOT` until the `2.0.0` release):
+On **Maven Central** — `groupId` `com.druvu`, current version `2.0.0`. Pick the
+module(s) for your scenario:
 
 **Client only**
 
@@ -116,7 +114,7 @@ Then depend on the scenario you need (`groupId` `com.druvu`, version
 <dependency>
     <groupId>com.druvu</groupId>
     <artifactId>druvu-lib-jmxmp-client</artifactId>
-    <version>1.5.0-SNAPSHOT</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -126,12 +124,15 @@ Then depend on the scenario you need (`groupId` `com.druvu`, version
 <dependency>
     <groupId>com.druvu</groupId>
     <artifactId>druvu-lib-jmxmp-server</artifactId>
-    <version>1.5.0-SNAPSHOT</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
 **Both sides** (in-process loopback, tooling that does client *and* server) —
 declare both `-client` and `-server`; each transitively brings `-common`.
+
+> Also published to **GitHub Packages**. To build from source instead:
+> `git clone https://github.com/DenissLarka/druvu-lib-jmxmp && cd druvu-lib-jmxmp && mvn -DskipTests install` (JDK 21).
 
 ## Security
 
@@ -156,9 +157,8 @@ Server:
 
 ```java
 Map<String, Object> env = new HashMap<>();
-env.put("jmx.remote.profiles", "TLS SASL/PLAIN");
-env.put("jmx.remote.tls.socket.factory", sslContext.getSocketFactory());
-env.put(JMXConnectorServer.AUTHENTICATOR, myAuthenticator); // required
+env.put("jmx.remote.tls.socket.factory", sslContext.getSocketFactory()); // recommended (omit ⇒ self-signed)
+env.put(JMXConnectorServer.AUTHENTICATOR, myAuthenticator); // the only required piece
 
 JMXServiceURL url = new JMXServiceURL("jmxmp", "0.0.0.0", 5555);
 JMXConnectorServer s = JMXConnectorServerFactory.newJMXConnectorServer(url, env, mbeanServer);
@@ -185,7 +185,6 @@ Client:
 
 ```java
 Map<String, Object> env = new HashMap<>();
-env.put("jmx.remote.profiles", "TLS SASL/PLAIN");
 env.put("jmx.remote.tls.socket.factory", sslContext.getSocketFactory());
 env.put(JMXConnector.CREDENTIALS, new String[] {"alice", "s3cr3t"});
 
@@ -226,9 +225,9 @@ frozen `javax.management.remote.*` surface is untouched.
 import com.druvu.jmxmp.shared.JmxmpServerSecurity;
 
 Map<String, Object> env = JmxmpServerSecurity.builder()
-        .tls(sslContext)                 // REQUIRED
+        .tls(sslContext)                 // recommended real cert (omit ⇒ ephemeral self-signed)
         .authenticator(myAuthenticator)  // REQUIRED
-        .build();                        // IllegalStateException if either is missing
+        .build();                        // IllegalStateException if the authenticator is missing
 
 var url = new JMXServiceURL("jmxmp", "0.0.0.0", 5555);
 var server = JMXConnectorServerFactory.newJMXConnectorServer(url, env, mbeanServer);
@@ -540,3 +539,8 @@ Derived from OpenDMK `jmx-optional` (Sun Microsystems). Dual-licensed: GPL v2
 **with the Classpath exception**, or CDDL v1.0 — your choice. See
 [`LICENSE`](LICENSE). Original copyright notices are preserved verbatim in
 every source file.
+
+---
+
+Part of the **druvu** toolkit — small, sharp Java libraries and JVM tooling.
+More at [druvu.com](https://druvu.com).
