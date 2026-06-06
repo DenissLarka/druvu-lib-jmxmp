@@ -99,26 +99,32 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
                 throw new IllegalStateException("This connector server is not attached to an MBean server");
             }
 
-            if (env != null) {
-                // PLAN-2.0.0 §7.6/§7.7: authorization is opt-in via a typed,
-                // code-only JmxmpAccessControl under ENV_KEY. Absent ⇒ no
-                // forwarder installed (authenticated-but-unrestricted; authn is
-                // already mandatory). A non-JmxmpAccessControl value (e.g. a
-                // String from -D/props) ⇒ fail CLOSED at server start, so the
-                // code-only guarantee is enforced, not merely documented. The
-                // legacy "jmx.remote.x.access.file" properties mechanism is
-                // gone (MBeanServerFileAccessController hard-deleted).
-                Object acValue = env.get(JmxmpAccessControl.ENV_KEY);
-                if (acValue != null) {
-                    if (!(acValue instanceof JmxmpAccessControl accessControl)) {
-                        throw new SecurityException(JmxmpAccessControl.ENV_KEY
-                                + " must be a code-supplied JmxmpAccessControl instance, but was "
-                                + acValue.getClass().getName());
-                    }
-                    facade.setMBeanServerForwarder(new AccessControlledMBeanServer(accessControl));
-                    mbs = facade.getMBeanServer();
-                }
+            // Authorization is opt-in via a typed, code-only JmxmpAccessControl
+            // under ENV_KEY: absent ⇒ allowAll (authenticated-but-unrestricted;
+            // authn is already mandatory); an instance ⇒ enforced per operation;
+            // a non-JmxmpAccessControl value (e.g. a String from -D/props) ⇒ fail
+            // CLOSED at server start, so the code-only guarantee is enforced, not
+            // merely documented. The legacy "jmx.remote.x.access.file" mechanism
+            // is gone (MBeanServerFileAccessController hard-deleted).
+            //
+            // The AccessControlledMBeanServer forwarder is installed UNCONDITIONALLY
+            // (even for allowAll): it is the choke point that permanently denies
+            // remote MBean lifecycle/deserialization regardless of the configured
+            // control. That denial must be an invariant of every secured server,
+            // not a function of whether a policy happens to be supplied.
+            Object acValue = (env != null) ? env.get(JmxmpAccessControl.ENV_KEY) : null;
+            JmxmpAccessControl accessControl;
+            if (acValue == null) {
+                accessControl = JmxmpAccessControl.allowAll();
+            } else if (acValue instanceof JmxmpAccessControl supplied) {
+                accessControl = supplied;
+            } else {
+                throw new SecurityException(JmxmpAccessControl.ENV_KEY
+                        + " must be a code-supplied JmxmpAccessControl instance, but was "
+                        + acValue.getClass().getName());
             }
+            facade.setMBeanServerForwarder(new AccessControlledMBeanServer(accessControl));
+            mbs = facade.getMBeanServer();
 
             try {
                 defaultClassLoader = EnvHelp.resolveServerClassLoader(env, mbs);

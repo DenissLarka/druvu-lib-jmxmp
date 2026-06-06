@@ -31,9 +31,9 @@ import javax.security.auth.Subject;
  *
  * <ul>
  *   <li><b>Roles</b> are named allow-lists. {@link #allow(JmxAction, String)} grants an action on an {@code ObjectName}
- *       pattern; {@link #allow(JmxAction)} grants an action with no target constraint (the right form for the coarse,
- *       non-targeted {@link JmxAction#QUERY} / {@link JmxAction#GET_DOMAINS}). {@link #inherit(String)} composes
- *       another role's grants into the current one.
+ *       pattern; {@link #allow(JmxAction)} grants an action with no target constraint (the right form for the
+ *       untargeted {@link JmxAction#READ} forms such as {@code queryNames} / {@code getDomains}).
+ *       {@link #inherit(String)} composes another role's grants into the current one.
  *   <li><b>Targets</b> are {@code ObjectName} patterns; a request matches when {@code new ObjectName(pattern)
  *       .apply(requestTarget)} is true. The shorthand {@code "*"} means "any name".
  *   <li><b>Principals</b> map by <em>name</em> ({@link java.security.Principal#getName()}) to roles via
@@ -41,10 +41,10 @@ import javax.security.auth.Subject;
  *       principals' granted roles (inheritance resolved) allows the request — RBAC union semantics.
  * </ul>
  *
- * <p><b>Deliberate 2.0.0 simplifications</b> (signed off, see the plan §7.8): {@code QUERY}/{@code GET_DOMAINS} are
- * coarse (a single grant, not per-discovered-name); {@code INVOKE} ignores the operation signature; principal mapping
- * is by name only; and there are <em>no deny rules and no rule precedence</em> — it is a pure allow-list, so the
- * classic allow/deny-ordering vulnerability class cannot exist.
+ * <p><b>Deliberate simplifications:</b> the verb taxonomy is coarse ({@code READ}/{@code WRITE}/{@code INVOKE}/
+ * {@code NOTIFY}); discovery folds into {@code READ}; there is no member-level (attribute-/operation-name) matching;
+ * principal mapping is by name only; and there are <em>no deny rules and no rule precedence</em> — it is a pure
+ * allow-list, so the classic allow/deny-ordering vulnerability class cannot exist.
  *
  * <p>Configuration errors (unknown referenced role, inheritance cycle, malformed pattern, misordered builder calls)
  * fail fast — at {@code allow(...)} or {@link #build()} time, never silently at authorization time. Instances built by
@@ -84,7 +84,8 @@ public final class PolicyBuilder {
     }
 
     /**
-     * Grants {@code action} with no target constraint — the correct form for coarse {@code QUERY}/{@code GET_DOMAINS}.
+     * Grants {@code action} with no target constraint — the correct form for the untargeted {@code READ} forms
+     * ({@code queryNames} / {@code getDomains}).
      */
     public PolicyBuilder allow(JmxAction action) {
         requireRole("allow");
@@ -238,9 +239,8 @@ public final class PolicyBuilder {
                     }
                 }
             }
-            throw new SecurityException("Access denied: " + request.action()
-                    + (request.target() != null ? " on " + request.target() : "")
-                    + (request.member() != null ? " (" + request.member() + ")" : ""));
+            throw new SecurityException(
+                    "Access denied: " + request.action() + (request.target() != null ? " on " + request.target() : ""));
         }
     }
 }

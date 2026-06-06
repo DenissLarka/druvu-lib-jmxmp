@@ -109,7 +109,16 @@ public class TLSServerHandler implements ProfileServer {
         SSLSocketFactory ssf = (SSLSocketFactory) env.get("jmx.remote.tls.socket.factory");
 
         if (ssf == null) {
-            ssf = (SSLSocketFactory) SSLSocketFactory.getDefault();
+            // druvu 2.0.0: no TLS socket factory configured. Honor an explicitly configured JSSE default
+            // (-Djavax.net.ssl.keyStore=...) if present; otherwise generate an ephemeral self-signed identity so the
+            // mandatory-TLS listener is encrypted out of the box (opportunistic, STARTTLS-style) rather than failing
+            // or — as classic plaintext JMXMP does — exposing everything in clear. This is encryption only, not
+            // server-identity / MITM protection; set jmx.remote.tls.socket.factory for that. See SelfSignedTls.
+            if (System.getProperty("javax.net.ssl.keyStore") != null) {
+                ssf = (SSLSocketFactory) SSLSocketFactory.getDefault();
+            } else {
+                ssf = SelfSignedTls.socketFactory();
+            }
         }
 
         String hostname = socket.getInetAddress().getHostName();

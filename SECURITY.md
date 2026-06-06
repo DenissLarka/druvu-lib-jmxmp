@@ -187,15 +187,23 @@ of it.
 
 - **Default semantics.** No `JmxmpAccessControl` under
   `JmxmpAccessControl.ENV_KEY` ⇒ *authenticated-but-unrestricted*: every
-  authenticated subject may perform every operation. This is the expected JMX
-  default and is **not** a fail-open — identity is real and entry is gated by
-  mandatory authentication. Supplying a control switches the server to
-  **strict default-deny**: anything not explicitly granted is refused, no
-  fall-through. `JmxmpAccessControl.allowAll()` is an explicit, **code-only**
+  authenticated subject may perform every operation **on existing MBeans**. This
+  is the expected JMX default and is **not** a fail-open — identity is real and
+  entry is gated by mandatory authentication. Supplying a control switches the
+  server to **strict default-deny**: anything not explicitly granted is refused,
+  no fall-through. `JmxmpAccessControl.allowAll()` is an explicit, **code-only**
   "authenticated = unrestricted" sentinel; a non-typed value under the key is
   rejected at server start (fail closed) — it cannot be flipped by a property,
   file, or the command line (same typed-env guarantee as the client policy
   below).
+- **Remote MBean lifecycle is permanently denied.** Authorization grants are a
+  coarse verb set (`READ` / `WRITE` / `INVOKE` / `NOTIFY`) over an `ObjectName`
+  target. Creating, registering, unregistering, or instantiating MBeans
+  remotely, and the deprecated `deserialize(...)` forms, are refused by the
+  server forwarder regardless of the configured control — there is no verb to
+  grant them and `allowAll()` does not relax them. A client can only ever act on
+  MBeans that already exist; the remote class-loading attack surface
+  (`createMBean`/`instantiate`) is closed by construction.
 - **The policy you write is deployer-owned surface.** The library enforces a
   policy faithfully; it cannot tell you the policy is too broad. An over-wide
   `ObjectName` pattern, an over-granted role, or `allowAll()` in production is

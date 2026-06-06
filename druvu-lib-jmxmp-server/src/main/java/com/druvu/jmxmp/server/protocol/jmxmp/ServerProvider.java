@@ -56,6 +56,7 @@ import java.util.Map;
 import javax.management.MBeanServer;
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXConnectorServerProvider;
+import javax.management.remote.JMXProviderException;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.jmxmp.JMXMPConnectorServer;
 
@@ -66,6 +67,20 @@ public class ServerProvider implements JMXConnectorServerProvider {
         if (!serviceURL.getProtocol().equals("jmxmp")) {
             throw new MalformedURLException("Protocol not jmxmp: " + serviceURL.getProtocol());
         }
-        return new JMXMPConnectorServer(serviceURL, environment, mbeanServer);
+        try {
+            return new JMXMPConnectorServer(serviceURL, environment, mbeanServer);
+        } catch (IllegalArgumentException | SecurityException policyViolation) {
+            // The mandatory server security gate (exactly jmx.remote.profiles="TLS SASL/PLAIN" plus a
+            // JMXAuthenticator) rejected this configuration. Rethrow as JMXProviderException — the JSR-160 signal for
+            // "the provider for this protocol exists but cannot serve this request" — so JMXConnectorServerFactory
+            // reports the real reason to the caller instead of masking it as the misleading
+            // "Unsupported protocol: jmxmp" (which reads as if the provider were missing from the classpath).
+            throw new JMXProviderException(
+                    "druvu-lib-jmxmp requires a secured JMXMP listener: set jmx.remote.profiles=\"TLS SASL/PLAIN\""
+                            + " and supply a JMXAuthenticator (e.g. build the env via JmxmpServerSecurity). Plaintext"
+                            + " JMXMP servers are not supported by this build, by design. Reason: "
+                            + policyViolation.getMessage(),
+                    policyViolation);
+        }
     }
 }

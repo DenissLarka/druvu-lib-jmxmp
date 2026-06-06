@@ -2,9 +2,9 @@
  * JmxAction.java
  *
  * New in the com.druvu fork (2.0) — not part of the original OpenDMK code.
- * The fine-grained JMX authorization action taxonomy: a replacement, for the
- * subset of behaviour JMXMP actually intercepts, of the per-operation model
- * that javax.management.MBeanPermission used to provide before JEP 486
+ * The coarse JMX authorization verb taxonomy: a deliberately small replacement,
+ * for the subset of behaviour JMXMP actually intercepts, of the per-operation
+ * model that javax.management.MBeanPermission used to provide before JEP 486
  * permanently removed the Security Manager.
  * Dual-licensed: GPL v2 only with the Classpath exception, or CDDL v1.0.
  * See the LICENSE file at the repo root.
@@ -13,56 +13,34 @@
 package com.druvu.jmxmp.shared;
 
 /**
- * The permission taxonomy for {@link JmxmpAccessControl}: one constant per intercepted {@code MBeanServer} operation
- * group, with names mirroring the action vocabulary of {@code javax.management.MBeanPermission} (familiar,
- * battle-tested, and the exact model JEP&nbsp;486 removed from the platform).
+ * The grantable verb taxonomy for {@link JmxmpAccessControl}: four coarse actions covering every authorizable
+ * {@code MBeanServer} operation on an <em>existing</em> MBean.
  *
- * <p>Each constant maps 1:1 to the row in the integration seam that builds a {@link JmxAccessRequest} for it. The
- * "read-ish" cluster — {@link #GET_ATTRIBUTE}, {@link #GET_MBEAN_INFO}, {@link #GET_OBJECT_INSTANCE},
- * {@link #GET_DOMAINS}, {@link #QUERY}, {@link #GET_CLASSLOADER}, {@link #DESERIALIZE} — observes; the rest mutate. The
- * legacy {@code invoke}-as-write conflation is intentionally gone: {@link #INVOKE} is its own action.
+ * <p>The taxonomy is deliberately small and matches what is actually enforced — there is no per-operation/per-attribute
+ * (member-level) matching, and there is no verb for remote MBean lifecycle. Creating, registering, unregistering, or
+ * instantiating MBeans remotely, and the deprecated {@code deserialize(...)} forms, are <strong>permanently
+ * denied</strong> by the server forwarder: there is no verb that can grant them and
+ * {@link JmxmpAccessControl#allowAll()} does not relax them. The only mutation a remote client can ever perform is to
+ * an MBean that already exists.
+ *
+ * <p>Each constant maps to one or more rows in the integration seam that builds a {@link JmxAccessRequest} for it.
  */
 public enum JmxAction {
 
-    /** {@code getAttribute}, {@code getAttributes} — targeted by ObjectName + attribute member. */
-    GET_ATTRIBUTE,
+    /**
+     * Read-only observation of the management plane: {@code getAttribute(s)} plus all introspection/discovery
+     * ({@code queryMBeans}/{@code queryNames}, {@code getMBeanInfo}, {@code getObjectInstance}, {@code isInstanceOf},
+     * {@code isRegistered}, {@code getDomains}, {@code getDefaultDomain}, {@code getMBeanCount}). Discovery is folded
+     * in because hiding the set of MBeans while permitting reads is security-by-obscurity, not a real control.
+     */
+    READ,
 
-    /** {@code setAttribute}, {@code setAttributes} — targeted by ObjectName + attribute member. */
-    SET_ATTRIBUTE,
+    /** {@code setAttribute}, {@code setAttributes} — changing attribute values on an existing MBean. */
+    WRITE,
 
-    /** {@code invoke} — targeted by ObjectName + operation member; the signature is not part of the decision. */
+    /** {@code invoke} — calling an operation on an existing MBean. The signature is not part of the decision. */
     INVOKE,
 
-    /** {@code createMBean}, {@code registerMBean} — targeted by ObjectName. */
-    REGISTER_MBEAN,
-
-    /** {@code unregisterMBean} — targeted by ObjectName. */
-    UNREGISTER_MBEAN,
-
-    /** {@code instantiate} — class instantiation (not an MBean registration). */
-    INSTANTIATE,
-
-    /** {@code addNotificationListener} — targeted by ObjectName. */
-    ADD_NOTIFICATION_LISTENER,
-
-    /** {@code removeNotificationListener} — targeted by ObjectName. */
-    REMOVE_NOTIFICATION_LISTENER,
-
-    /** {@code getMBeanInfo} — targeted by ObjectName. */
-    GET_MBEAN_INFO,
-
-    /** {@code getObjectInstance}, {@code isInstanceOf} — targeted by ObjectName. */
-    GET_OBJECT_INSTANCE,
-
-    /** {@code getClassLoader}, {@code getClassLoaderFor}, {@code getClassLoaderRepository} — ObjectName nullable. */
-    GET_CLASSLOADER,
-
-    /** {@code queryMBeans}, {@code queryNames} — coarse: a single grant, not per-discovered-name (see SPI doc). */
-    QUERY,
-
-    /** {@code getDomains}, {@code getMBeanCount} — coarse: not targeted. */
-    GET_DOMAINS,
-
-    /** {@code deserialize(...)} overloads — ObjectName nullable. */
-    DESERIALIZE
+    /** {@code addNotificationListener}, {@code removeNotificationListener} — subscribing to an existing MBean. */
+    NOTIFY
 }

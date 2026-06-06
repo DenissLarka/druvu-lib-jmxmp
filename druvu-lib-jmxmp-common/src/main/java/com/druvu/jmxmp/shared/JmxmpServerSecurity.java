@@ -29,18 +29,20 @@ import javax.net.ssl.SSLContext;
  *
  * <pre>{@code
  * Map<String, Object> env = JmxmpServerSecurity.builder()
- *     .tls(sslContext)                                 // REQUIRED
+ *     .tls(sslContext)                                 // optional (omit = ephemeral self-signed, encrypted-by-default)
  *     .authenticator(myJMXAuthenticator)               // REQUIRED
  *     .authorization(JmxmpAccessControl.policy()...)   // optional; omit = authenticated-but-unrestricted
  *     .rawEnv("some.advanced.jsr160.key", value)       // optional escape hatch, last-wins
- *     .build();                                        // IllegalStateException if TLS or authn missing
+ *     .build();                                        // IllegalStateException if authn missing
  * new JMXMPConnectorServer(url, env, mbeanServer);     // unchanged, frozen call
  * }</pre>
  *
  * <p><b>Pure assembler — no security logic of its own.</b> This class only populates env keys. It contains no
- * credential verification, no authenticator implementation, and no "skip auth" convenience: {@link Builder#tls} and
- * {@link Builder#authenticator} are both mandatory and {@link Builder#build()} fails closed if either is missing. The
- * only route to an authentication-only (unrestricted) server is the explicit, code-only
+ * credential verification, no authenticator implementation, and no "skip auth" convenience:
+ * {@link Builder#authenticator} is mandatory and {@link Builder#build()} fails closed if it is missing.
+ * {@link Builder#tls} is optional — omit it and the server generates an ephemeral self-signed certificate at startup
+ * (encryption by default, not MITM-proof; supply a real context for server-identity protection). The only route to an
+ * authentication-only (unrestricted) server is the explicit, code-only
  * {@code .authorization(JmxmpAccessControl.allowAll())}. Authentication itself is supplied by the caller as a
  * {@link JMXAuthenticator} — deliberately <em>not</em> a built-in username/password store, which would be security
  * logic this facade must not own.
@@ -75,7 +77,11 @@ public final class JmxmpServerSecurity {
 
         private Builder() {}
 
-        /** REQUIRED. The server's TLS context; its {@code SSLSocketFactory} is handed to the TLS profile. */
+        /**
+         * Optional. The server's TLS context; its {@code SSLSocketFactory} is handed to the TLS profile. Omit it and
+         * the server generates an ephemeral self-signed certificate at startup (encryption by default — but not
+         * verifiable by clients, so no server-identity / MITM protection; supply a real context for that).
+         */
         public Builder tls(SSLContext sslContext) {
             Objects.requireNonNull(sslContext, "sslContext");
             this.tlsSocketFactory = sslContext.getSocketFactory();
@@ -107,13 +113,10 @@ public final class JmxmpServerSecurity {
         /**
          * Builds the env {@code Map}.
          *
-         * @throws IllegalStateException if TLS or the authenticator was not supplied, or if {@link #rawEnv} targets a
+         * @throws IllegalStateException if the authenticator was not supplied, or if {@link #rawEnv} targets a
          *     mandatory key
          */
         public Map<String, Object> build() {
-            if (tlsSocketFactory == null) {
-                throw new IllegalStateException("tls(SSLContext) is mandatory");
-            }
             if (authenticator == null) {
                 throw new IllegalStateException("authenticator(JMXAuthenticator) is mandatory");
             }
@@ -128,7 +131,9 @@ public final class JmxmpServerSecurity {
             }
             Map<String, Object> env = new HashMap<>();
             env.put(PROFILES_KEY, PROFILES);
-            env.put(TLS_SOCKET_FACTORY_KEY, tlsSocketFactory);
+            if (tlsSocketFactory != null) {
+                env.put(TLS_SOCKET_FACTORY_KEY, tlsSocketFactory);
+            }
             env.put(JMXConnectorServer.AUTHENTICATOR, authenticator);
             if (authorization != null) {
                 env.put(JmxmpAccessControl.ENV_KEY, authorization);

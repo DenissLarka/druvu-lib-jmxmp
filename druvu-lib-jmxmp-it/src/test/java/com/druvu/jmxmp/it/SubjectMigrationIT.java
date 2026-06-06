@@ -88,7 +88,7 @@ public class SubjectMigrationIT {
 
         JmxmpAccessControl ac = JmxmpAccessControl.policy()
                 .role("r")
-                .allow(JmxAction.GET_ATTRIBUTE, "*")
+                .allow(JmxAction.READ, "*")
                 .principal("admin")
                 .grantedRoles("r")
                 .build();
@@ -116,10 +116,10 @@ public class SubjectMigrationIT {
         mbs.registerMBean(new Echo(), name);
         TestAuthenticator auth = new TestAuthenticator(Map.of("admin", "s3cr3t"));
 
-        // admin is authenticated and mapped to a role, but the role does NOT grant GET_ATTRIBUTE.
+        // admin is authenticated and mapped to a role, but the role does NOT grant READ (only INVOKE).
         JmxmpAccessControl ac = JmxmpAccessControl.policy()
                 .role("r")
-                .allow(JmxAction.QUERY)
+                .allow(JmxAction.INVOKE, "*")
                 .principal("admin")
                 .grantedRoles("r")
                 .build();

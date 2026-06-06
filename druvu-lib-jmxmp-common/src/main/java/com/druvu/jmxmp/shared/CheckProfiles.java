@@ -65,7 +65,10 @@ import java.util.stream.Collectors;
  * (order-independent, no other entries). Any other combination — empty, plaintext-only, TLS-only, SASL-only, an
  * alternate SASL mechanism (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER, …), or an extra entry beyond the
  * allowed set — is rejected with an explicit message naming the offending set. These are <strong>not</strong>
- * user-overridable; no environment property bypasses them. They are called from the server gates only.
+ * user-overridable; no environment property bypasses them. They are called from the server gates only. Note: the server
+ * connector defaults an <em>absent</em> profile to {@code {TLS, SASL/PLAIN}} before calling these (so a caller
+ * supplying only a {@code JMXAuthenticator} still gets a secure listener); a present-but-different set is still
+ * rejected here.
  *
  * <p><b>Client side — secure by default, typed-API escape hatch.</b> {@link #enforceClient(List, Map)} /
  * {@link #enforceClientSpec(String, Map)} apply the same {@code {TLS, SASL/PLAIN}} default, but honour a

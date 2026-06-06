@@ -77,8 +77,10 @@ public interface JmxmpAccessControl {
      *
      * <pre>{@code
      * JmxmpAccessControl ac = JmxmpAccessControl.policy()
-     *     .role("ro").allow(JmxAction.GET_ATTRIBUTE, "*").allow(JmxAction.QUERY).allow(JmxAction.GET_DOMAINS)
-     *     .role("ops").inherit("ro").allow(JmxAction.INVOKE, "com.acme:type=Cache,*")
+     *     .role("ro").allow(JmxAction.READ, "*")
+     *     .role("ops").inherit("ro")
+     *         .allow(JmxAction.INVOKE, "com.acme:type=Cache,*")
+     *         .allow(JmxAction.WRITE, "com.acme:type=Cache,*")
      *     .principal("alice").grantedRoles("ops")
      *     .build();
      * }</pre>

@@ -57,9 +57,14 @@ Beyond that one fix, the model is built for the post-Security-Manager platform:
   `JmxmpAccessControl` SPI with a built-in role / `ObjectName`-pattern policy
   (`JmxmpAccessControl.policy()`) restores the per-operation control the removed
   `MBeanPermission` system used to give, and replaces OpenDMK's 2007
-  `username=readonly|readwrite` properties file. The open-server opt-out
-  (`JmxmpAccessControl.allowAll()`) is a typed, code-only sentinel — it can
-  never be flipped by a system property, a config file, or the command line.
+  `username=readonly|readwrite` properties file. Authorization is by a coarse
+  verb set — `READ` / `WRITE` / `INVOKE` / `NOTIFY` — over an `ObjectName`
+  target. Remote MBean **lifecycle** (create / register / unregister /
+  instantiate) and the deprecated `deserialize` forms are **permanently
+  denied**: there is no verb to grant them and `allowAll()` does not relax them,
+  so a client can only ever act on MBeans that already exist. The open-server
+  opt-out (`JmxmpAccessControl.allowAll()`) is a typed, code-only sentinel — it
+  can never be flipped by a system property, a config file, or the command line.
 - **Honest, bounded compatibility.** The wire/transport API stays byte-for-byte
   OpenDMK (verified every build). The security-idiom change is the JDK forcing
   every library's hand — not this fork breaking faith.
@@ -160,6 +165,22 @@ JMXConnectorServer s = JMXConnectorServerFactory.newJMXConnectorServer(url, env,
 s.start();
 ```
 
+**The profile and the TLS certificate are both optional — encrypted by
+default.** A server needs only a `JMXAuthenticator`: an absent
+`jmx.remote.profiles` is defaulted to `TLS SASL/PLAIN` (the only profile this
+build accepts), and an absent `jmx.remote.tls.socket.factory` makes the server
+generate an **ephemeral self-signed certificate** at startup (logged at
+`INFO`), so the listener is
+encrypted with zero configuration — far better than classic plaintext JMXMP.
+Caveat: that certificate changes every boot and is **not verifiable by
+clients**, so it protects against *passive* interception only — no
+server-identity / MITM protection, and an active MITM could still capture the
+SASL/PLAIN password. For real protection, supply your own
+`jmx.remote.tls.socket.factory` from a trusted keystore (or set
+`-Djavax.net.ssl.keyStore`, which the server honors instead). The certificate
+is produced with the JDK's `keytool`; in a stripped `jlink`/native image
+without it, configure the factory explicitly.
+
 Client:
 
 ```java
@@ -223,13 +244,12 @@ import static com.druvu.jmxmp.shared.JmxAction.*;
 
 JmxmpAccessControl policy = JmxmpAccessControl.policy()
         .role("ro")
-            .allow(GET_ATTRIBUTE, "*")
-            .allow(GET_MBEAN_INFO, "*")
-            .allow(QUERY).allow(GET_DOMAINS)
+            .allow(READ, "*")            // attributes + all introspection/discovery
+            .allow(READ)                 // untargeted reads (queryNames / getDomains)
         .role("ops")
             .inherit("ro")
-            .allow(INVOKE,        "com.acme:type=Cache,*")
-            .allow(SET_ATTRIBUTE, "com.acme:type=Cache,*")
+            .allow(INVOKE, "com.acme:type=Cache,*")
+            .allow(WRITE,  "com.acme:type=Cache,*")
         .principal("svc-dashboard").grantedRoles("ro")
         .principal("alice").grantedRoles("ops")
         .build();   // fails fast: unknown/cyclic role, bad pattern, mis-ordered calls
@@ -254,6 +274,10 @@ flag for it:
 .authorization(JmxmpAccessControl.allowAll())   // typed, code-only — never a property
 ```
 
+`allowAll()` opens every *normal* operation (read / write / invoke / notify) to
+any authenticated subject — but **not** remote MBean lifecycle or
+`deserialize`, which stay permanently denied regardless of the control.
+
 **Advanced JSR-160 keys** go through `rawEnv` (last-wins). It is an escape
 hatch, not a back door: it **cannot set or unset a mandatory/typed key**
 (`jmx.remote.profiles`, the TLS factory, the authenticator, or the
@@ -267,6 +291,90 @@ Guarantees, by construction: `build()` throws `IllegalStateException` if TLS
 or the authenticator is absent; a non-`JmxmpAccessControl` value can never
 reach the authorization slot (so the open-server opt-out cannot be flipped by
 ops tooling); and the returned map is a fresh, caller-owned `HashMap`.
+
+### Wiring the server into your application
+
+The connector server is created the same way in every runtime: build the env
+(ideally with `JmxmpServerSecurity`), call
+`JMXConnectorServerFactory.newJMXConnectorServer(url, env, mbeanServer)`, then
+`start()`. What changes per framework is only *where* that lives and how the
+`MBeanServer`, `SSLContext` and `JMXAuthenticator` are obtained. Security is
+opt-in to **provide**, not to enforce: supply nothing and the server refuses to
+start — there is no plaintext fallback.
+
+**Plain Java (no framework):**
+
+```java
+SSLContext ssl = ...;          // your keystore
+JMXAuthenticator auth = ...;   // your credential check
+
+Map<String, Object> env = JmxmpServerSecurity.builder()
+        .tls(ssl)
+        .authenticator(auth)
+        .build();
+
+var url = new JMXServiceURL("jmxmp", "0.0.0.0", 5555);
+var server = JMXConnectorServerFactory.newJMXConnectorServer(
+        url, env, ManagementFactory.getPlatformMBeanServer());
+server.start();
+// server.stop() on shutdown
+```
+
+**Spring (no Spring Boot)** — expose it as a managed bean. Spring will not call
+`start()` for you, so do it in the bean method; `destroyMethod = "stop"` closes
+the listener on context shutdown:
+
+```java
+@Configuration
+public class JmxmpServerConfig {
+
+    @Bean(destroyMethod = "stop")
+    public JMXConnectorServer jmxmpServer(MBeanServer mbeanServer,
+                                          SSLContext sslContext,
+                                          JMXAuthenticator authenticator) throws IOException {
+        Map<String, Object> env = JmxmpServerSecurity.builder()
+                .tls(sslContext)
+                .authenticator(authenticator)
+                .build();
+        JMXConnectorServer server = JMXConnectorServerFactory.newJMXConnectorServer(
+                new JMXServiceURL("jmxmp", "0.0.0.0", 5555), env, mbeanServer);
+        server.start();
+        return server;
+    }
+}
+```
+
+(`MBeanServer`, `SSLContext` and `JMXAuthenticator` are your own beans.)
+
+**Spring Boot** — the bean is identical; Boot only adds convenience. With
+`spring.jmx.enabled=true` it auto-provides the platform `MBeanServer` bean, and
+you can gate the listener behind a property. Nothing JMXMP-specific is
+auto-configured, so you still build the env yourself:
+
+```java
+@Configuration
+@ConditionalOnProperty(prefix = "app.jmxmp", name = "enabled", havingValue = "true")
+public class JmxmpServerConfig {
+
+    @Bean(destroyMethod = "stop")
+    JMXConnectorServer jmxmpServer(MBeanServer mbeanServer,
+                                   SSLContext sslContext,
+                                   JMXAuthenticator authenticator) throws IOException {
+        Map<String, Object> env = JmxmpServerSecurity.builder()
+                .tls(sslContext).authenticator(authenticator).build();
+        JMXConnectorServer server = JMXConnectorServerFactory.newJMXConnectorServer(
+                new JMXServiceURL("jmxmp", "0.0.0.0", 5555), env, mbeanServer);
+        server.start();
+        return server;
+    }
+}
+```
+
+If a shared auto-configuration or starter creates the connector server for many
+apps, give it a contribution hook — an *env customizer* the application
+implements — and add these keys there, so each app supplies its own
+`SSLContext`/`JMXAuthenticator` while the starter stays security-agnostic. With
+no contribution the server fails closed, which is the intended default.
 
 ### Client profile policy (connecting to legacy / plaintext endpoints)
 
@@ -370,6 +478,18 @@ JVM filter can only tighten it, never loosen it. See
   the client (above) — the one behavioral break for public-API users; set
   `jmx.remote.profiles` accordingly, or use a code-only `ClientProfilePolicy`
   on the client to reach legacy/plaintext endpoints. The server has no opt-out.
+  **Not a plaintext drop-in:** replacing a *plaintext* `jmxremote_optional`
+  server is therefore a runtime breaking change — until you configure
+  `TLS SASL/PLAIN` + a `JMXAuthenticator` (see *Wiring the server into your
+  application*), the server refuses to start, failing fast with a
+  `JMXProviderException` that names the required
+  `jmx.remote.profiles="TLS SASL/PLAIN"` (not a cryptic *Unsupported protocol:
+  jmxmp*). A client reaching an existing plaintext endpoint is unaffected — use
+  `ClientProfilePolicy`. You do **not** need to provide a certificate, though:
+  omit `jmx.remote.tls.socket.factory` and the server auto-generates an
+  ephemeral self-signed one (encryption by default — see *Configuration*), so
+  the only mandatory pieces are the `TLS SASL/PLAIN` profile and a
+  `JMXAuthenticator`.
 - **Server-side caller identity is now `Subject.current()`**, not the
   Security-Manager-era `Subject.getSubject(AccessController.getContext())`.
   MBeans (or `JMXAuthenticator`s) that inspect the caller must use
@@ -381,11 +501,15 @@ JVM filter can only tighten it, never loosen it. See
   Authorization is now the typed, code-only `JmxmpAccessControl` SPI
   (default-deny) with a built-in `JmxmpAccessControl.policy()` RBAC, supplied
   under `JmxmpAccessControl.ENV_KEY` (or via the `JmxmpServerSecurity` builder).
-  No control configured ⇒ authenticated-but-unrestricted (authentication is
-  still mandatory); a non-`JmxmpAccessControl` value under the key ⇒
-  fail-closed at server start. Migration: express each legacy
+  No control configured ⇒ authenticated-but-unrestricted on existing MBeans
+  (authentication is still mandatory); a non-`JmxmpAccessControl` value under
+  the key ⇒ fail-closed at server start. Grants are a coarse verb set
+  (`READ`/`WRITE`/`INVOKE`/`NOTIFY`) over an `ObjectName` target; remote MBean
+  lifecycle (create/register/unregister/instantiate) and the deprecated
+  `deserialize` forms are **permanently denied** regardless of the control
+  (`allowAll()` does not relax them). Migration: express each legacy
   `user=readonly|readwrite` line as `policy().role(...).principal(user)
-  .grantedRoles(...)` in code.
+  .grantedRoles(...)` in code (e.g. `readonly` → `allow(READ, "*")`).
 - **Subject delegation removed.** This library does not support JMX subject
   delegation. The frozen `javax.management.remote.*` delegation signatures
   remain (drop-in compatibility), but a request carrying a delegation subject

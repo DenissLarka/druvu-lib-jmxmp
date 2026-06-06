@@ -16,14 +16,15 @@ import javax.management.ObjectName;
  * Immutable description of one intercepted {@code MBeanServer} operation, handed to
  * {@link JmxmpAccessControl#checkAccess(javax.security.auth.Subject, JmxAccessRequest)} once per operation.
  *
+ * <p>Authorization is by {@link JmxAction verb} and target {@code ObjectName} only. There is deliberately no
+ * member-level (attribute-name / operation-name) granularity: parity with the coarse model and the simplest correct
+ * rule set.
+ *
  * @param action the operation class being attempted; never {@code null}
- * @param target the targeted MBean name, or {@code null} for non-targeted operations (e.g.
- *     {@link JmxAction#GET_DOMAINS} and some {@link JmxAction#GET_CLASSLOADER} / {@link JmxAction#DESERIALIZE} forms)
- * @param member the attribute name (for {@link JmxAction#GET_ATTRIBUTE} / {@link JmxAction#SET_ATTRIBUTE}) or the
- *     operation name (for {@link JmxAction#INVOKE}); {@code null} when not applicable. The {@code invoke} signature is
- *     deliberately <em>not</em> part of the decision (parity with {@code javax.management.MBeanPermission}).
+ * @param target the targeted MBean name, or {@code null} for the untargeted read forms (e.g. {@code getDomains} /
+ *     {@code queryNames})
  */
-public record JmxAccessRequest(JmxAction action, ObjectName target, String member) {
+public record JmxAccessRequest(JmxAction action, ObjectName target) {
 
     public JmxAccessRequest {
         if (action == null) {
