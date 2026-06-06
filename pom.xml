@@ -6,9 +6,56 @@
 
 	<groupId>com.druvu</groupId>
 	<artifactId>druvu-lib-jmxmp</artifactId>
-	<version>1.5.0-SNAPSHOT</version>
+	<version>2.0.0</version>
 	<name>druvu-lib-jmxmp (reactor)</name>
 	<packaging>pom</packaging>
+	<description>Modern, modular JMXMP connector for Java 21+ — a faithful fork of OpenDMK jmxremote_optional (the JMX Remote API "optional" / JMXMP reference implementation).</description>
+	<url>https://github.com/DenissLarka/druvu-lib-jmxmp</url>
+
+	<licenses>
+		<!--
+		  Dual-licensed (your choice of EITHER), faithful to the OpenDMK origin.
+		  Maven lists both; the authoritative OR relationship is stated in LICENSE.
+		-->
+		<license>
+			<name>Common Development and Distribution License (CDDL) v1.0</name>
+			<url>https://opensource.org/licenses/CDDL-1.0</url>
+			<distribution>repo</distribution>
+		</license>
+		<license>
+			<name>GNU General Public License (GPL) Version 2, with the Classpath Exception</name>
+			<url>https://openjdk.org/legal/gplv2+ce.html</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
+	<developers>
+		<developer>
+			<name>Deniss LARKA</name>
+			<email>deniss.larka@gmail.com</email>
+		</developer>
+	</developers>
+
+	<scm>
+		<url>https://github.com/DenissLarka/druvu-lib-jmxmp</url>
+		<connection>scm:git:https://github.com/DenissLarka/druvu-lib-jmxmp</connection>
+		<developerConnection>scm:git:https://github.com/DenissLarka/druvu-lib-jmxmp</developerConnection>
+		<tag>HEAD</tag>
+	</scm>
+
+	<!--
+	  GitHub Packages target. Used by a plain `mvn deploy` (no -Prelease) and by
+	  the github-publish CI workflow. The release profile's central-publishing
+	  plugin (extensions=true) overrides deploy for `-Prelease`, so Maven Central
+	  and GitHub Packages are reached by separate invocations.
+	-->
+	<distributionManagement>
+		<repository>
+			<id>github</id>
+			<name>GitHub Packages</name>
+			<url>https://maven.pkg.github.com/DenissLarka/druvu-lib-jmxmp/</url>
+		</repository>
+	</distributionManagement>
 
 	<!--
 	  Reactor parent (artifact: druvu-lib-jmxmp). Modules common/client/server
@@ -89,12 +136,34 @@
 					<executions>
 						<execution>
 							<id>attach-sources</id>
-							<phase>verify</phase>
+							<!-- package (not verify) so the sources jar exists before
+							     the release-profile GPG signing runs in verify. -->
+							<phase>package</phase>
 							<goals>
 								<goal>jar-no-fork</goal>
 							</goals>
 						</execution>
 					</executions>
+				</plugin>
+
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-javadoc-plugin</artifactId>
+					<version>3.12.0</version>
+					<executions>
+						<execution>
+							<id>attach-javadocs</id>
+							<phase>package</phase>
+							<goals>
+								<goal>jar</goal>
+							</goals>
+						</execution>
+					</executions>
+					<configuration>
+						<show>public</show>
+						<source>${java.version}</source>
+						<doclint>none</doclint>
+					</configuration>
 				</plugin>
 
 				<plugin>
@@ -150,6 +219,18 @@
 				<artifactId>maven-enforcer-plugin</artifactId>
 			</plugin>
 
+			<!-- Activate the managed source + javadoc jars (required by Maven
+			     Central). Test-only modules (it, validation) opt out via
+			     maven.source.skip / maven.javadoc.skip in their poms. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+			</plugin>
+
 			<plugin>
 				<groupId>com.diffplug.spotless</groupId>
 				<artifactId>spotless-maven-plugin</artifactId>
@@ -176,5 +257,66 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+		  Maven Central release profile. Activated with -Prelease.
+		  GPG-signs all artifacts in the verify phase; the central-publishing
+		  plugin uploads the reactor bundle in the deploy phase (CI only).
+		  `mvn clean verify -Prelease` signs but does NOT publish (publish is
+		  bound to deploy). Modules with maven.deploy.skip=true (it, validation)
+		  are excluded from the published bundle.
+		-->
+		<profile>
+			<id>release</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-project-info-reports-plugin</artifactId>
+						<version>3.9.0</version>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-gpg-plugin</artifactId>
+						<version>3.2.8</version>
+						<executions>
+							<execution>
+								<id>sign-artifacts</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>sign</goal>
+								</goals>
+								<configuration>
+									<gpgArguments>
+										<arg>--batch</arg>
+										<arg>--pinentry-mode</arg>
+										<arg>loopback</arg>
+									</gpgArguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<version>0.10.0</version>
+						<extensions>true</extensions>
+						<configuration>
+							<publishingServerId>central</publishingServerId>
+							<tokenAuth>true</tokenAuth>
+							<checksums>required</checksums>
+							<skipPublishing>false</skipPublishing>
+							<!-- Auto-release after Central-side validation passes, and
+							     block the build until the deployment is PUBLISHED so a
+							     validation failure surfaces here instead of silently. -->
+							<autoPublish>true</autoPublish>
+							<waitUntil>published</waitUntil>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 </project>

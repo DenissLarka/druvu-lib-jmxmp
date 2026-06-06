@@ -7,13 +7,20 @@
 	<parent>
 		<groupId>com.druvu</groupId>
 		<artifactId>druvu-lib-jmxmp</artifactId>
-		<version>1.5.0-SNAPSHOT</version>
+		<version>2.0.0</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
 	<artifactId>druvu-lib-jmxmp-validation</artifactId>
 	<name>druvu-lib-jmxmp-validation (modular matrix)</name>
 	<packaging>jar</packaging>
+
+	<properties>
+		<!-- Test-only module: never published to Maven Central. -->
+		<maven.deploy.skip>true</maven.deploy.skip>
+		<maven.source.skip>true</maven.source.skip>
+		<maven.javadoc.skip>true</maven.javadoc.skip>
+	</properties>
 
 	<!--
 	  VALIDATION & COMPATIBILITY MATRIX.
