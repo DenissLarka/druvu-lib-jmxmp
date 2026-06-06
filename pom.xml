@@ -6,7 +6,7 @@
 
 	<groupId>com.druvu</groupId>
 	<artifactId>druvu-lib-jmxmp</artifactId>
-	<version>2.0.0</version>
+	<version>2.0.1-SNAPSHOT</version>
 	<name>druvu-lib-jmxmp (reactor)</name>
 	<packaging>pom</packaging>
 	<description>Modern, modular JMXMP connector for Java 21+ — a faithful fork of OpenDMK jmxremote_optional (the JMX Remote API "optional" / JMXMP reference implementation).</description>

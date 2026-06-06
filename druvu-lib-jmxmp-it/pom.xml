@@ -7,7 +7,7 @@
 	<parent>
 		<groupId>com.druvu</groupId>
 		<artifactId>druvu-lib-jmxmp</artifactId>
-		<version>2.0.0</version>
+		<version>2.0.1-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
@@ -16,7 +16,10 @@
 	<packaging>jar</packaging>
 
 	<properties>
-		<!-- Test-only module: never published to Maven Central. -->
+		<!-- Test-only module: not published. maven.deploy.skip covers the
+		     standard deploy (GitHub Packages); the release profile below sets
+		     central-publishing skipPublishing=true, because that plugin does
+		     NOT honor maven.deploy.skip. -->
 		<maven.deploy.skip>true</maven.deploy.skip>
 		<maven.source.skip>true</maven.source.skip>
 		<maven.javadoc.skip>true</maven.javadoc.skip>
@@ -54,5 +57,25 @@
 			<version>${project.version}</version>
 		</dependency>
 	</dependencies>
+
+	<profiles>
+		<!-- Exclude this test-only module from the Maven Central bundle.
+		     central-publishing-maven-plugin ignores maven.deploy.skip, so its
+		     per-module skipPublishing must be set explicitly. -->
+		<profile>
+			<id>release</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<configuration>
+							<skipPublishing>true</skipPublishing>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 </project>
