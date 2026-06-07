@@ -1,5 +1,6 @@
 # druvu-lib-jmxmp
 
+[![CI](https://github.com/DenissLarka/druvu-lib-jmxmp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DenissLarka/druvu-lib-jmxmp/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.druvu/druvu-lib-jmxmp-common?label=Maven%20Central)](https://central.sonatype.com/artifact/com.druvu/druvu-lib-jmxmp-common)
 ![Java](https://img.shields.io/badge/Java-21%2B-blue)
 [![License](https://img.shields.io/badge/license-GPLv2%2BCPE%20%2F%20CDDL--1.0-blue)](LICENSE)
