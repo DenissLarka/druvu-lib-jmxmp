@@ -145,6 +145,11 @@ public class AdminClient implements ClientAdmin {
             // Execute client-selected profiles
             //
             List profileList = selectProfiles(serverProfiles);
+            // Enforce the client profile policy BEFORE running any profile. The profile loop below activates SASL,
+            // which transmits credentials over the current (possibly plaintext) transport; a policy violation must
+            // abort here — not at the post-loop check further down — so credentials never reach the wire on a
+            // downgraded/stripped connection. The chosen profile set is fully known at this point.
+            CheckProfiles.enforceClient(profileList, env);
             for (Iterator i = profileList.iterator(); i.hasNext(); ) {
                 String profile = (String) i.next();
                 ProfileClient p = ProfileClientFactory.createProfile(profile, env);
