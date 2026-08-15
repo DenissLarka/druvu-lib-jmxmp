@@ -544,4 +544,4 @@ every source file.
 ---
 
 Part of the **druvu** toolkit — small, sharp Java libraries and JVM tooling.
-More at [druvu.com](https://druvu.com).
+Project page: [druvu.com/projects/druvu-lib-jmxmp](https://druvu.com/projects/druvu-lib-jmxmp.html) · more at [druvu.com](https://druvu.com).
