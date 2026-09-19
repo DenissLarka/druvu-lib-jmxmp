@@ -132,7 +132,7 @@ module(s) for your scenario:
 **Both sides** (in-process loopback, tooling that does client *and* server) —
 declare both `-client` and `-server`; each transitively brings `-common`.
 
-> Also published to **GitHub Packages**. To build from source instead:
+> To build from source instead:
 > `git clone https://github.com/DenissLarka/druvu-lib-jmxmp && cd druvu-lib-jmxmp && mvn -DskipTests install` (JDK 21).
 
 ## Security
