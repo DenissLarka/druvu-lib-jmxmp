@@ -44,20 +44,6 @@
 	</scm>
 
 	<!--
-	  GitHub Packages target. Used by a plain `mvn deploy` (no -Prelease) and by
-	  the github-publish CI workflow. The release profile's central-publishing
-	  plugin (extensions=true) overrides deploy for `-Prelease`, so Maven Central
-	  and GitHub Packages are reached by separate invocations.
-	-->
-	<distributionManagement>
-		<repository>
-			<id>github</id>
-			<name>GitHub Packages</name>
-			<url>https://maven.pkg.github.com/DenissLarka/druvu-lib-jmxmp/</url>
-		</repository>
-	</distributionManagement>
-
-	<!--
 	  Reactor parent (artifact: druvu-lib-jmxmp). Modules common/client/server
 	  are the 3-module library; `it` is the integration-test module (no main,
 	  classpath harness). Internal packages: com.druvu.jmxmp.*; public OpenDMK
