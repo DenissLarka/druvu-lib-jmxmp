@@ -144,6 +144,11 @@ By default this build accepts **exactly one** profile set:
 - plaintext, TLS-only, SASL-only, or any non-PLAIN SASL mechanism
   (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER) → `SecurityException`
 - a server without a `JMXAuthenticator` → rejected at construction
+- TLS listed after another profile (`SASL/PLAIN TLS`) → `SecurityException`,
+  on both sides and under every client policy: TLS runs first, so no
+  credential crosses the plain socket (2.0.1)
+- a SASL/PLAIN authorization id naming another user → the handshake fails: a
+  client acts as the user it authenticated as (2.0.1)
 
 On the **server** this is absolute — there is no escape hatch. On the
 **client** it is the secure *default*: a typed, code-only `ClientProfilePolicy`

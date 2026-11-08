@@ -54,8 +54,9 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>{@link #mandatoryTlsSasl()} — the default; the client requires exactly {@code { TLS, SASL/PLAIN }}.
- *   <li>{@link #unrestricted()} — no client-side profile enforcement at all (including none / plaintext); the operator
- *       accepts the consequence. The deserialization allow-list still applies to the client receive path regardless.
+ *   <li>{@link #unrestricted()} — no check of the profile set (including none / plaintext); the operator accepts the
+ *       consequence. TLS, when listed, still runs first, and the deserialization allow-list still applies to the client
+ *       receive path.
  *   <li>{@link #require(String...)} — the negotiated/configured profile set must be exactly the enumerated set
  *       (order-independent, case-insensitive), e.g. {@code require("TLS")} for TLS-only without SASL.
  * </ul>
@@ -92,8 +93,9 @@ public final class ClientProfilePolicy {
     }
 
     /**
-     * No client-side profile enforcement — any profile set, including none (plaintext), is accepted. The operator
-     * explicitly owns the consequence. The serialization allow-list still guards the client receive path.
+     * No check of the profile set — any set, including none (plaintext), is accepted. The operator explicitly owns the
+     * consequence. TLS, when listed, still runs first, and the serialization allow-list still guards the client receive
+     * path.
      */
     public static ClientProfilePolicy unrestricted() {
         return UNRESTRICTED;

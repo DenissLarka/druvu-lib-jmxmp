@@ -62,27 +62,35 @@ import java.util.stream.Collectors;
  *
  * <p><b>Server side — mandatory, single-shape, no escape hatch.</b> {@link #enforce(List, Map)} /
  * {@link #enforceSpec(String, Map)} accept a profile set <strong>iff</strong> it is exactly {@code {TLS, SASL/PLAIN}}
- * (order-independent, no other entries). Any other combination — empty, plaintext-only, TLS-only, SASL-only, an
- * alternate SASL mechanism (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER, …), or an extra entry beyond the
- * allowed set — is rejected with an explicit message naming the offending set. These are <strong>not</strong>
- * user-overridable; no environment property bypasses them. They are called from the server gates only. Note: the server
- * connector defaults an <em>absent</em> profile to {@code {TLS, SASL/PLAIN}} before calling these (so a caller
- * supplying only a {@code JMXAuthenticator} still gets a secure listener); a present-but-different set is still
- * rejected here.
+ * (no other entries; the order is checked apart, TLS first). Any other combination — empty, plaintext-only, TLS-only,
+ * SASL-only, an alternate SASL mechanism (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER, …), or an extra entry
+ * beyond the allowed set — is rejected with an explicit message naming the offending set. These are
+ * <strong>not</strong> user-overridable; no environment property bypasses them. They are called from the server gates
+ * only. Note: the server connector defaults an <em>absent</em> profile to {@code {TLS, SASL/PLAIN}} before calling
+ * these (so a caller supplying only a {@code JMXAuthenticator} still gets a secure listener); a present-but-different
+ * set is still rejected here.
  *
  * <p><b>Client side — secure by default, typed-API escape hatch.</b> {@link #enforceClient(List, Map)} /
  * {@link #enforceClientSpec(String, Map)} apply the same {@code {TLS, SASL/PLAIN}} default, but honour a
  * {@link ClientProfilePolicy} instance supplied under {@link ClientProfilePolicy#ENV_KEY}: {@code unrestricted()}
- * disables client enforcement entirely, {@code require(...)} pins an exact alternate set. The opt-out is reachable only
- * from code that constructs a {@code ClientProfilePolicy} — a {@code String} (or anything else) under that key is
- * rejected, never silently honoured or ignored — so it cannot be flipped via a system property, properties file, or the
- * command line. The threat model is deliberately asymmetric: a server must not be relaxable (it would expose a weak
- * inbound listener), an outbound client connection is the operator's own informed choice.
+ * disables the set check, {@code require(...)} pins an exact alternate set. The opt-out is reachable only from code
+ * that constructs a {@code ClientProfilePolicy} — a {@code String} (or anything else) under that key is rejected, never
+ * silently honoured or ignored — so it cannot be flipped via a system property, properties file, or the command line.
+ * The threat model is deliberately asymmetric: a server must not be relaxable (it would expose a weak inbound
+ * listener), an outbound client connection is the operator's own informed choice.
+ *
+ * <p><b>Both sides — TLS first.</b> The set says which profiles run, not in which order, and the client runs them in
+ * the order of its list: {@code SASL/PLAIN TLS} is the right set and still sends the password over the plain socket. So
+ * TLS, when a list holds it, must come first ({@link #enforceTlsFirst(List)}), under every client policy; and the
+ * server refuses any profile a client starts before TLS is active ({@link #enforceTlsActive(String, boolean)}).
  */
 public final class CheckProfiles {
 
-    /** The only profile set this build accepts (upper-cased, order-independent). */
-    private static final Set<String> REQUIRED = Set.of("TLS", "SASL/PLAIN");
+    /** The profile that must run first: every profile after it travels inside it. */
+    private static final String TLS = "TLS";
+
+    /** The only profile set this build accepts (upper-cased; the order is checked apart, TLS first). */
+    private static final Set<String> REQUIRED = Set.of(TLS, "SASL/PLAIN");
 
     private CheckProfiles() {}
 
@@ -119,6 +127,44 @@ public final class CheckProfiles {
                     + ". Other SASL mechanisms (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER)"
                     + " are not supported.");
         }
+        enforceTlsFirst(profiles);
+    }
+
+    /**
+     * TLS, when a profile list holds it, comes first and only there. Profiles run in list order, so in
+     * {@code SASL/PLAIN TLS} the SASL credentials would cross the plain socket before TLS starts. No client policy
+     * relaxes this: no profile this connector speaks needs to run before TLS.
+     *
+     * @param profiles the profile names in the order they run, or {@code null} for none
+     * @throws SecurityException if TLS is in the list anywhere but first
+     */
+    public static void enforceTlsFirst(List<String> profiles) {
+        if (profiles == null) {
+            return;
+        }
+        // trimmed, as the set check trims: a name is the same name for both checks
+        boolean tlsAfterAnother = profiles.stream().skip(1).map(String::trim).anyMatch(TLS::equalsIgnoreCase);
+        if (tlsAfterAnother) {
+            throw new SecurityException("JMXMP runs TLS first, so that no profile runs over the plain socket. Got: "
+                    + profiles + ". Put TLS first in jmx.remote.profiles, e.g. \"TLS SASL/PLAIN\".");
+        }
+    }
+
+    /**
+     * The server's side of {@link #enforceTlsFirst(List)}, checked as each profile starts. The server mandates TLS, so
+     * until TLS is active on a connection the only profile a client may start is TLS. A client that sends SASL/PLAIN
+     * first has already put its password on the plain socket; the server cannot undo that, but it refuses before any
+     * credential is checked, so such a client never gets a session.
+     *
+     * @param profile the profile the client starts
+     * @param tlsActive whether TLS already protects the connection
+     * @throws SecurityException if a profile other than TLS starts before TLS is active
+     */
+    public static void enforceTlsActive(String profile, boolean tlsActive) {
+        if (!tlsActive && !TLS.equalsIgnoreCase(profile)) {
+            throw new SecurityException("JMXMP runs TLS first, but the client started " + profile
+                    + " before TLS. Set jmx.remote.profiles=\"TLS SASL/PLAIN\" on the client.");
+        }
     }
 
     /**
@@ -151,19 +197,20 @@ public final class CheckProfiles {
      */
     public static void enforceClientSpec(String spec, Map<String, ?> env) {
         ClientProfilePolicy policy = resolveClientPolicy(env);
-        if (policy.isUnrestricted()) {
-            return;
-        }
         if (policy.isMandatoryTlsSasl()) {
             enforceSpec(spec, env);
-            return;
+        } else if (!policy.isUnrestricted()) {
+            // require(set): spec must be configured and match exactly.
+            if (spec == null || spec.isBlank()) {
+                throw new IllegalArgumentException("Client profile policy requires jmx.remote.profiles=\""
+                        + String.join(" ", policy.requiredSet()) + "\"");
+            }
+            enforceClient(Arrays.asList(spec.trim().split("\\s+")), env);
         }
-        // require(set): spec must be configured and match exactly.
-        if (spec == null || spec.isBlank()) {
-            throw new IllegalArgumentException("Client profile policy requires jmx.remote.profiles=\""
-                    + String.join(" ", policy.requiredSet()) + "\"");
+        // TLS first under every policy, unrestricted() included
+        if (spec != null && !spec.isBlank()) {
+            enforceTlsFirst(Arrays.asList(spec.trim().split("\\s+")));
         }
-        enforceClient(Arrays.asList(spec.trim().split("\\s+")), env);
     }
 
     /**
@@ -176,19 +223,18 @@ public final class CheckProfiles {
      */
     public static void enforceClient(List<String> profiles, Map<String, ?> env) {
         ClientProfilePolicy policy = resolveClientPolicy(env);
-        if (policy.isUnrestricted()) {
-            return;
-        }
         if (policy.isMandatoryTlsSasl()) {
             enforce(profiles, env);
-            return;
+        } else if (!policy.isUnrestricted()) {
+            Set<String> got = (profiles == null)
+                    ? Set.of()
+                    : profiles.stream().map(p -> p.toUpperCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
+            if (!got.equals(policy.requiredSet())) {
+                throw new SecurityException(
+                        "Client profile policy requires exactly " + policy.requiredSet() + ". Got: " + got + ".");
+            }
         }
-        Set<String> got = (profiles == null)
-                ? Set.of()
-                : profiles.stream().map(p -> p.toUpperCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
-        if (!got.equals(policy.requiredSet())) {
-            throw new SecurityException(
-                    "Client profile policy requires exactly " + policy.requiredSet() + ". Got: " + got + ".");
-        }
+        // TLS first under every policy, unrestricted() included
+        enforceTlsFirst(profiles);
     }
 }

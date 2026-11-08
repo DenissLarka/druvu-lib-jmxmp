@@ -168,7 +168,12 @@ public class AdminServer implements ServerAdmin {
                     ProfileMessage pm = (ProfileMessage) msg;
                     String pn = pm.getProfileName();
                     ProfileServer p = getProfile(mc, pn);
+                    if (p != null && p.isComplete()) {
+                        // A profile runs once: run again, TLS would replace the session's Subject with its own.
+                        throw new SecurityException("The profile " + pn + " already ran on this connection.");
+                    }
                     if (p == null) {
+                        CheckProfiles.enforceTlsActive(pn, isTlsActive(mc));
                         p = ProfileServerFactory.createProfile(pn, env);
                         if (logger.traceOn()) {
                             logger.trace(
@@ -233,6 +238,12 @@ public class AdminServer implements ServerAdmin {
         synchronized (subjectsTable) {
             subjectsTable.remove(mc);
         }
+    }
+
+    /** Whether the TLS profile has completed on this connection, so that the socket is now the TLS one. */
+    private boolean isTlsActive(MessageConnection mc) {
+        ProfileServer tls = getProfile(mc, "TLS");
+        return tls != null && tls.isComplete();
     }
 
     private ProfileServer getProfile(MessageConnection mc, String pn) {

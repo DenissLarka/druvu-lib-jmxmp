@@ -45,8 +45,8 @@ library — vendor it, audit it yourself, and own the maintenance.
 | any earlier version       | ❌ not supported                      |
 | pre-release / `-SNAPSHOT` | ❌ not supported — not for production |
 
-The library is currently **pre-release** (not published to Maven Central). No
-version is under a support commitment until a `2.0.0` release is tagged.
+Releases are on Maven Central since `2.0.0`; the latest one is the supported
+one.
 
 ## Reporting a vulnerability
 

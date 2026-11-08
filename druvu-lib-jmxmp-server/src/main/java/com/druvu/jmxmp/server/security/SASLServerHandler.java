@@ -150,11 +150,18 @@ public class SASLServerHandler implements ProfileServer {
         String authcid = new String(blob, n1 + 1, n2 - (n1 + 1), StandardCharsets.UTF_8);
         String passwd = new String(blob, n2 + 1, blob.length - (n2 + 1), StandardCharsets.UTF_8);
 
+        // The client acts as the user it authenticates as. An authorization id that names someone else would add
+        // that user's name to the Subject, and with it that user's grants: refused, before any credential is checked.
+        if (!authzid.isEmpty() && !authzid.equals(authcid)) {
+            throw new SecurityException("SASL/PLAIN: acting as another user is not supported; the authorization id must"
+                    + " be empty or the authenticated user");
+        }
+
         // Delegate validation to the mandatory authenticator. A bad
         // credential throws SecurityException, which propagates so AdminServer
         // sends a HandshakeErrorMessage and closes the connection.
         Subject authSubject = authenticator.authenticate(new String[] {authcid, passwd});
-        this.authorizationId = (authzid == null || authzid.isEmpty()) ? authcid : authzid;
+        this.authorizationId = authcid;
         if (authSubject != null) {
             if (subject == null) {
                 subject = new Subject();

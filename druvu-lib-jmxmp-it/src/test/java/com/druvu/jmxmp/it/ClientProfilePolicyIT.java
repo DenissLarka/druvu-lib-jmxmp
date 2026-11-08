@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.jmxmp.JMXMPConnector;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 /**
@@ -81,8 +82,32 @@ public class ClientProfilePolicyIT {
                 () -> CheckProfiles.enforceClientSpec(null, tlsOnly)); // policy set but spec missing
 
         Map<String, Object> custom =
-                env(ClientProfilePolicy.ENV_KEY, ClientProfilePolicy.require("TLS", "SASL/DIGEST-MD5"));
-        CheckProfiles.enforceClient(List.of("SASL/DIGEST-MD5", "TLS"), custom); // order-independent → ok
+                env(ClientProfilePolicy.ENV_KEY, ClientProfilePolicy.require("SASL/DIGEST-MD5", "TLS"));
+        CheckProfiles.enforceClient(List.of("TLS", "SASL/DIGEST-MD5"), custom); // the set ignores the order → ok
+    }
+
+    // --- TLS first: no policy lets a profile run before TLS -------------------------------------------------------
+
+    @DataProvider
+    Object[][] everyPolicy() {
+        return new Object[][] {
+            {ClientProfilePolicy.mandatoryTlsSasl()},
+            {ClientProfilePolicy.unrestricted()},
+            {ClientProfilePolicy.require("TLS", "SASL/PLAIN")},
+        };
+    }
+
+    @Test(dataProvider = "everyPolicy")
+    public void tlsRunsFirstUnderEveryPolicy(ClientProfilePolicy policy) {
+        Map<String, Object> e = env(ClientProfilePolicy.ENV_KEY, policy);
+        assertThrows(SecurityException.class, () -> CheckProfiles.enforceClientSpec("SASL/PLAIN TLS", e));
+        assertThrows(SecurityException.class, () -> CheckProfiles.enforceClient(List.of("SASL/PLAIN", "TLS"), e));
+        assertThrows(SecurityException.class, () -> CheckProfiles.enforceClient(List.of("sasl/plain", "tls"), e));
+        // a name the set check trims is the same name for the order check
+        assertThrows(SecurityException.class, () -> CheckProfiles.enforceClient(List.of("SASL/PLAIN", "\u0000TLS"), e));
+        assertThrows(SecurityException.class, () -> CheckProfiles.enforceClient(List.of("SASL/PLAIN", "\tTLS"), e));
+        assertThrows(SecurityException.class, () -> CheckProfiles.enforceClientSpec("SASL/PLAIN \u0000TLS", e));
+        CheckProfiles.enforceClientSpec("TLS SASL/PLAIN", e); // TLS first → ok
     }
 
     @Test
