@@ -185,8 +185,8 @@ public class ModularMatrixIT {
 
     /**
      * On the module path the engine + protocol providers resolve via {@link ServiceLoader} from the renamed
-     * {@code com.druvu.jmxmp.{client,server}.*} packages, with no {@code jmx.remote.profile.provider.pkgs} override.
-     * (The negative "common-only → helpful error" graph is asserted statically by module-graphs.sh.)
+     * {@code com.druvu.jmxmp.{client,server}.*} packages. (The negative "common-only → helpful error" graph is asserted
+     * by DeploymentShapesIT.)
      */
     @Test
     public void providersResolveFromRenamedPackages() {

@@ -7,7 +7,7 @@
 	<parent>
 		<groupId>com.druvu</groupId>
 		<artifactId>druvu-lib-jmxmp</artifactId>
-		<version>2.0.1-SNAPSHOT</version>
+		<version>3.0.0-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
@@ -32,7 +32,7 @@
 	  negative paths). No main code, no module-info: a plain classpath
 	  test harness — surefire runs with useModulePath=false. Renamed from the
 	  former `legacy` transitional scaffold once its last main source
-	  migrated to the three modules (the split-package transitional state
+	  migrated to the library modules (the split-package transitional state
 	  no longer exists). Kept as the permanent regression net; the
 	  modular-deployment matrix (validation module) is additive to, not a
 	  replacement for, this suite. No artifact is published from this module.
@@ -54,6 +54,12 @@
 		<dependency>
 			<groupId>com.druvu</groupId>
 			<artifactId>druvu-lib-jmxmp-server</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<!-- Declared, not inherited: the tests build access policies directly. -->
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-access</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 	</dependencies>

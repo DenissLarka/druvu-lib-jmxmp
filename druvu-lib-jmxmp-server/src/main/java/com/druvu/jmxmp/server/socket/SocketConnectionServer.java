@@ -50,10 +50,10 @@
 
 package com.druvu.jmxmp.server.socket;
 
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.SocketConnection;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.internal.DefaultConfig;
+import com.druvu.jmxmp.internal.SocketConnection;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
@@ -71,9 +71,7 @@ public class SocketConnectionServer implements MessageConnectionServer {
 
     public SocketConnectionServer(JMXServiceURL addr, Map env) throws IOException {
 
-        if (logger.traceOn()) {
-            logger.trace("constructor", "Constructs a SocketConnectionServer on " + addr);
-        }
+        LOG.log(Level.TRACE, () -> "Constructs a SocketConnectionServer on " + addr);
 
         if (addr == null) {
             throw new NullPointerException("Null address.");
@@ -96,9 +94,7 @@ public class SocketConnectionServer implements MessageConnectionServer {
     // implements MessageConnectionServer interface
 
     public void start(Map env) throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("start", "Starts the server now.");
-        }
+        LOG.log(Level.TRACE, "Starts the server now.");
 
         Map newEnv = new HashMap();
         if (this.env != null) {
@@ -139,18 +135,14 @@ public class SocketConnectionServer implements MessageConnectionServer {
     }
 
     public MessageConnection accept() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("accept", "Waiting a new connection...");
-        }
+        LOG.log(Level.TRACE, "Waiting a new connection...");
 
         MessageConnection mc = new SocketConnection(ss.accept());
         return mc;
     }
 
     public void stop() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("stop", "Stops the server now.");
-        }
+        LOG.log(Level.TRACE, "Stops the server now.");
 
         if (ss != null) {
             ss.close();
@@ -170,5 +162,5 @@ public class SocketConnectionServer implements MessageConnectionServer {
     private static final String DEFAULT_PROTOCOL = "jmxmp";
     private static final int DEFAULT_BACKLOG = 100;
 
-    private final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "SocketConnectionServer");
+    private static final System.Logger LOG = System.getLogger(SocketConnectionServer.class.getName());
 }

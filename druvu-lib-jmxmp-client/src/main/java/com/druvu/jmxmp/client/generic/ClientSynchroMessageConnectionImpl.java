@@ -50,19 +50,19 @@
 
 package com.druvu.jmxmp.client.generic;
 
-import com.druvu.jmxmp.client.security.AdminClient;
-import com.druvu.jmxmp.shared.ClientAdmin;
-import com.druvu.jmxmp.shared.ClientSynchroMessageConnection;
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.ServerAdmin;
-import com.druvu.jmxmp.shared.SynchroCallback;
-import com.druvu.jmxmp.util.ClassLogger;
-import com.druvu.jmxmp.util.ThreadService;
+import com.druvu.jmxmp.client.internal.ClientAdmin;
+import com.druvu.jmxmp.client.internal.ClientConfig;
+import com.druvu.jmxmp.client.internal.ClientSynchroMessageConnection;
+import com.druvu.jmxmp.internal.DefaultConfig;
+import com.druvu.jmxmp.internal.SynchroCallback;
+import com.druvu.jmxmp.util.ConnectorThreads;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.lang.System.Logger.Level;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import javax.management.remote.generic.ConnectionClosedException;
 import javax.management.remote.generic.MessageConnection;
 import javax.management.remote.message.CloseMessage;
@@ -94,9 +94,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
     public void connect(Map env) throws IOException {
         synchronized (stateLock) {
             if (state == UNCONNECTED) {
-                if (logger.traceOn()) {
-                    logger.trace("connect", "Establishing the connection.");
-                }
+                LOG.log(Level.TRACE, "Establishing the connection.");
 
                 // first time to connect, need to merge env parameters
                 // with the one passed to the constructor.
@@ -111,7 +109,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 wtimeout = DefaultConfig.getRequestTimeout(newEnv);
                 waitConnectedState = DefaultConfig.getTimeoutForWaitConnectedState(newEnv);
 
-                clientAdmin = DefaultConfig.getClientAdmin(newEnv, () -> new AdminClient(newEnv));
+                clientAdmin = ClientConfig.getClientAdmin(newEnv);
 
                 state = CONNECTING;
                 stateLock.notifyAll();
@@ -123,15 +121,15 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 this.env = newEnv;
 
                 reader = new MessageReader();
-                threads = new ThreadService(1, 1);
-                threads.handoff(reader);
+                // Two threads, as OpenDMK had: the reader, and room for what it hands off while it still runs (the new
+                // reader of a reconnect, a job for a message the server sent).
+                threads = ConnectorThreads.pool("client-connection", 2);
+                threads.execute(reader);
 
                 state = CONNECTED;
                 stateLock.notifyAll();
             } else if (state == FAILED || state == CONNECTED) { // reconnect
-                if (logger.traceOn()) {
-                    logger.trace("connect", "Re-establishing the connection...");
-                }
+                LOG.log(Level.TRACE, "Re-establishing the connection...");
 
                 if (state == CONNECTED) {
                     state = FAILED;
@@ -157,11 +155,10 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 }
 
                 // wakeup all waiting threads
-                if (logger.traceOn()) {
-                    String s = "Wakeup the threads which are waiting a response "
-                            + "frome the server to inform them of the connection failure.";
-                    logger.trace("connect", s);
-                }
+                LOG.log(
+                        Level.TRACE,
+                        "Wakeup the threads which are waiting a response from the server to inform them of the"
+                                + " connection failure.");
 
                 final ConnectionClosedException ce =
                         new ConnectionClosedException("The connection has been closed by the server.");
@@ -188,7 +185,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 state = CONNECTED;
 
                 reader = new MessageReader();
-                threads.handoff(reader);
+                threads.execute(reader);
 
                 stateLock.notifyAll();
             } else {
@@ -197,15 +194,11 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
             }
         }
 
-        if (logger.traceOn()) {
-            logger.trace("connect", "Done");
-        }
+        LOG.log(Level.TRACE, "Done");
     }
 
     public void sendOneWay(Message msg) throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("sendOneWay", "Send a message without response.");
-        }
+        LOG.log(Level.TRACE, "Send a message without response.");
 
         checkState();
 
@@ -215,18 +208,14 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
     }
 
     public Message sendWithReturn(Message msg) throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("sendWithReturn", "Send a message with response.");
-        }
+        LOG.log(Level.TRACE, "Send a message with response.");
 
         checkState();
 
         Message ret = null;
 
         if (msg instanceof NotificationRequestMessage) {
-            if (logger.traceOn()) {
-                logger.trace("sendWithReturn", "Send a NotificationRequestMessage.");
-            }
+            LOG.log(Level.TRACE, "Send a NotificationRequestMessage.");
 
             notifResp = null;
 
@@ -251,11 +240,9 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 notifResp = null;
             }
         } else if (msg instanceof MBeanServerRequestMessage) {
-            if (logger.traceOn()) {
-                logger.trace("sendWithReturn", "Send a MBeanServerRequestMessage.");
-            }
+            LOG.log(Level.TRACE, "Send a MBeanServerRequestMessage.");
 
-            final Long id = new Long(((MBeanServerRequestMessage) msg).getMessageId());
+            final Long id = Long.valueOf(((MBeanServerRequestMessage) msg).getMessageId());
 
             // When receiving CloseMessage, it is possible that the server closes
             // itself by timeout, so we will do reconnection and then wakeup all
@@ -322,9 +309,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                         throw (ConnectionClosedException) mwrapper.msg;
                     }
 
-                    if (logger.traceOn()) {
-                        logger.trace("sendWithReturn", "Got a local ConnectionClosedException, retry.");
-                    }
+                    LOG.log(Level.TRACE, "Got a local ConnectionClosedException, retry.");
 
                     retried = true;
 
@@ -340,9 +325,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
     }
 
     public void close() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("close", "Closing this SynchroMessageConnection.");
-        }
+        LOG.log(Level.TRACE, "Closing this SynchroMessageConnection.");
 
         synchronized (stateLock) {
             if (state == TERMINATED) {
@@ -351,22 +334,18 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
 
             state = TERMINATED;
 
-            if (logger.traceOn()) {
-                logger.trace("close", "Close the callback reader.");
-            }
+            LOG.log(Level.TRACE, "Close the callback reader.");
             if (reader != null) {
                 reader.stop();
             }
 
             if (threads != null) {
-                threads.terminate();
+                ConnectorThreads.stop(threads);
 
                 threads = null;
             }
 
-            if (logger.traceOn()) {
-                logger.trace("close", "Closing the underlying connection.");
-            }
+            LOG.log(Level.TRACE, "Closing the underlying connection.");
             if (connection != null) {
                 connection.close();
             }
@@ -374,9 +353,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
             clientAdmin.connectionClosed(connection);
 
             // clean
-            if (logger.traceOn()) {
-                logger.trace("close", "Clean all threads waiting theire responses.");
-            }
+            LOG.log(Level.TRACE, "Clean all threads waiting theire responses.");
 
             synchronized (waitingList) {
                 for (Iterator iter = waitingList.values().iterator(); iter.hasNext(); ) {
@@ -431,9 +408,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 Message msg;
 
                 while (!stopped()) {
-                    if (logger.traceOn()) {
-                        logger.trace("MessageReader-run", "Waiting a coming message...");
-                    }
+                    LOG.log(Level.TRACE, "Waiting a coming message...");
 
                     msg = null;
 
@@ -469,17 +444,13 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                         ResponseMsgWrapper mwrapper;
                         synchronized (waitingList) {
                             mwrapper = (ResponseMsgWrapper)
-                                    waitingList.get(new Long(((MBeanServerResponseMessage) msg).getMessageId()));
+                                    waitingList.get(Long.valueOf(((MBeanServerResponseMessage) msg).getMessageId()));
                         }
 
                         if (mwrapper == null) {
                             checkState();
                             // waiting thread is timeout
-                            if (logger.traceOn()) {
-                                logger.trace(
-                                        "MessageReader-run",
-                                        "Receive a MBeanServerResponseMessage but no one is waiting it.");
-                            }
+                            LOG.log(Level.TRACE, "Receive a MBeanServerResponseMessage but no one is waiting it.");
                         } else {
                             synchronized (mwrapper) {
                                 mwrapper.setMsg(msg);
@@ -488,7 +459,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                             }
                         }
                     } else { // unknown message, protocol error
-                        threads.handoff(new RemoteJob(msg));
+                        threads.execute(new RemoteJob(msg));
                     }
 
                     if (msg instanceof CloseMessage) {
@@ -497,24 +468,18 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 }
             } catch (Exception eee) {
                 // need to stop
-                if (logger.traceOn()) {
-                    logger.trace("MessageReader-run", "stops.");
-                }
+                LOG.log(Level.TRACE, "stops.");
             }
 
             synchronized (stateLock) {
                 executingThreadInterrupted = true;
             }
 
-            if (logger.traceOn()) {
-                logger.trace("MessageReader-run", "ended.");
-            }
+            LOG.log(Level.TRACE, "ended.");
         }
 
         public void stop() {
-            if (logger.traceOn()) {
-                logger.trace("MessageReader-terminated", "be called.");
-            }
+            LOG.log(Level.TRACE, "be called.");
 
             synchronized (stateLock) {
                 if (Thread.currentThread() != executingThread
@@ -527,9 +492,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
                 }
             }
 
-            if (logger.traceOn()) {
-                logger.trace("MessageReader-terminated", "done.");
-            }
+            LOG.log(Level.TRACE, "done.");
         }
 
         private boolean stopped() {
@@ -563,9 +526,7 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
         }
 
         public void run() {
-            if (logger.traceOn()) {
-                logger.trace("RemoteJob-run", "Receive a new request.");
-            }
+            LOG.log(Level.TRACE, "Receive a new request.");
 
             try {
                 Message resp = callback.execute(msg);
@@ -637,13 +598,12 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
     private transient SynchroCallback callback;
 
     private transient ClientAdmin clientAdmin = null;
-    private transient ServerAdmin serverAdmin = null;
 
     private transient Subject subject = null;
 
     private Map env;
 
-    private transient ThreadService threads;
+    private transient ExecutorService threads;
     private transient MessageReader reader;
 
     private transient long wtimeout;
@@ -679,5 +639,5 @@ public class ClientSynchroMessageConnectionImpl implements ClientSynchroMessageC
 
     private long waitConnectedState;
 
-    private final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "SynchroMessageConnectionImpl");
+    private static final System.Logger LOG = System.getLogger(ClientSynchroMessageConnectionImpl.class.getName());
 }

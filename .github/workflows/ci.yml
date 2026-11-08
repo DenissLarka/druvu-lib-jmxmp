@@ -3,9 +3,9 @@
 # it lands on main — the publish workflows only run on release, so without this a
 # red build stays invisible until release time.
 #
-# JDK 21 Temurin (not 25): the build pins java.version=21 and enforces it via
-# maven-enforcer requireJavaVersion, matching the publish workflows. `verify` also
-# exercises the integration-test (-it) module.
+# JDK 25 builds it; the code targets Java 21 (java.version), which the enforcer requires
+# as a minimum. `verify` also runs the integration-test (it) and module-path (validation)
+# modules.
 name: CI
 
 on:

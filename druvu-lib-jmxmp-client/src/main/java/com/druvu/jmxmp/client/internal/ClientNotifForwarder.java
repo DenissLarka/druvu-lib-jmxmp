@@ -46,11 +46,11 @@
 
 package com.druvu.jmxmp.client.internal;
 
-import com.druvu.jmxmp.shared.ListenerInfo;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.internal.ListenerInfo;
 import com.druvu.jmxmp.util.EnvHelp;
 import java.io.IOException;
 import java.io.NotSerializableException;
+import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -97,9 +97,7 @@ public abstract class ClientNotifForwarder {
             Subject delegationSubject)
             throws IOException {
 
-        if (logger.traceOn()) {
-            logger.trace("addNotificationListener", "Add the listener " + listener + " at " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Add the listener " + listener + " at " + name);
 
         infoList.put(
                 listenerID, new ClientListenerInfo(listenerID, name, listener, filter, handback, delegationSubject));
@@ -112,9 +110,7 @@ public abstract class ClientNotifForwarder {
 
         beforeRemove();
 
-        if (logger.traceOn()) {
-            logger.trace("removeNotificationListener", "Remove the listener " + listener + " from " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Remove the listener " + listener + " from " + name);
 
         ArrayList ids = new ArrayList();
         ArrayList values = new ArrayList(infoList.values());
@@ -139,9 +135,7 @@ public abstract class ClientNotifForwarder {
             ObjectName name, NotificationListener listener, NotificationFilter filter, Object handback)
             throws ListenerNotFoundException, IOException {
 
-        if (logger.traceOn()) {
-            logger.trace("removeNotificationListener", "Remove the listener " + listener + " from " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Remove the listener " + listener + " from " + name);
 
         beforeRemove();
 
@@ -167,9 +161,7 @@ public abstract class ClientNotifForwarder {
     }
 
     public synchronized Integer[] removeNotificationListener(ObjectName name) {
-        if (logger.traceOn()) {
-            logger.trace("removeNotificationListener", "Remove all listeners registered at " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Remove all listeners registered at " + name);
 
         ArrayList ids = new ArrayList();
 
@@ -240,7 +232,7 @@ public abstract class ClientNotifForwarder {
 
     /**
      * Called after reconnection is finished. This method is intended to be called only by a client connetor: <code>
-     * RMIConnector</code/> and <code/>ClientIntermediary</code>.
+     * RMIConnector</code> and <code>ClientIntermediary</code>.
      */
     public synchronized void postReconnection(ClientListenerInfo[] listenerInfos) throws IOException {
 
@@ -258,12 +250,12 @@ public abstract class ClientNotifForwarder {
             }
         }
 
-        final boolean trace = logger.traceOn();
+        final boolean trace = LOG.isLoggable(Level.TRACE);
         final int len = listenerInfos.length;
 
         for (int i = 0; i < len; i++) {
             if (trace) {
-                logger.trace("addNotificationListeners", "Add a listener at " + listenerInfos[i].getListenerID());
+                LOG.log(Level.TRACE, "Add a listener at " + listenerInfos[i].getListenerID());
             }
 
             infoList.put(listenerInfos[i].getListenerID(), listenerInfos[i]);
@@ -280,9 +272,7 @@ public abstract class ClientNotifForwarder {
                 final String msg = "Failed to register a listener to the mbean "
                         + "server: the client will not do clean when an MBean "
                         + "is unregistered";
-                if (logger.traceOn()) {
-                    logger.trace("init", msg, e);
-                }
+                LOG.log(Level.TRACE, () -> msg, e);
             }
         } else if (listenerInfos.length > 0) { // old listeners re-registered
             init(true);
@@ -297,9 +287,7 @@ public abstract class ClientNotifForwarder {
             return;
         }
 
-        if (logger.traceOn()) {
-            logger.trace("terminate", "Terminating...");
-        }
+        LOG.log(Level.TRACE, "Terminating...");
 
         if (state == STARTED) {
             infoList.clear();
@@ -381,7 +369,7 @@ public abstract class ClientNotifForwarder {
                 if (missed > 0) {
                     final String msg = "May have lost up to " + missed + " notification" + (missed == 1 ? "" : "s");
                     lostNotifs(msg, missed);
-                    logger.trace("NotifFetcher.run", msg);
+                    LOG.log(Level.TRACE, msg);
                 }
 
                 // forward
@@ -405,7 +393,7 @@ public abstract class ClientNotifForwarder {
             final ListenerInfo li = (ClientListenerInfo) listeners.get(listenerID);
 
             if (li == null) {
-                logger.trace("NotifFetcher.dispatch", "Listener ID not in map");
+                LOG.log(Level.TRACE, "Listener ID not in map");
                 return;
             }
 
@@ -415,7 +403,7 @@ public abstract class ClientNotifForwarder {
                 l.handleNotification(notif, h);
             } catch (RuntimeException e) {
                 final String msg = "Failed to forward a notification " + "to a listener";
-                logger.trace("NotifFetcher-run", msg, e);
+                LOG.log(Level.TRACE, msg, e);
             }
         }
 
@@ -424,22 +412,19 @@ public abstract class ClientNotifForwarder {
                 NotificationResult nr =
                         ClientNotifForwarder.this.fetchNotifs(clientSequenceNumber, maxNotifications, timeout);
 
-                if (logger.traceOn()) {
-                    logger.trace("NotifFetcher-run", "Got notifications from the server: " + nr);
-                }
+                LOG.log(Level.TRACE, () -> "Got notifications from the server: " + nr);
 
                 return nr;
             } catch (ClassNotFoundException e) {
-                logger.trace("NotifFetcher.fetchNotifs", e);
+                LOG.log(Level.TRACE, e.toString(), e);
                 return fetchOneNotif();
             } catch (NotSerializableException e) {
-                logger.trace("NotifFetcher.fetchNotifs", e);
+                LOG.log(Level.TRACE, e.toString(), e);
                 return fetchOneNotif();
             } catch (IOException ioe) {
                 if (!shouldStop()) {
-                    logger.error(
-                            "NotifFetcher-run", "Failed to fetch notification, stopping thread. Error is: " + ioe, ioe);
-                    logger.debug("NotifFetcher-run", ioe);
+                    LOG.log(Level.ERROR, "Failed to fetch notification, stopping thread. Error is: " + ioe, ioe);
+                    LOG.log(Level.TRACE, ioe.toString(), ioe);
                 }
 
                 // no more fetching
@@ -481,12 +466,12 @@ public abstract class ClientNotifForwarder {
                     // 0 notifs to update startSequenceNumber
                     nr = cnf.fetchNotifs(startSequenceNumber, 0, 0L);
                 } catch (ClassNotFoundException e) {
-                    logger.warning("NotifFetcher.fetchOneNotif", "Impossible exception: " + e);
-                    logger.debug("NotifFetcher.fetchOneNotif", e);
+                    LOG.log(Level.WARNING, "Impossible exception: " + e);
+                    LOG.log(Level.TRACE, e.toString(), e);
                     return null;
                 } catch (IOException e) {
                     if (!shouldStop()) {
-                        logger.trace("NotifFetcher.fetchOneNotif", e);
+                        LOG.log(Level.TRACE, e.toString(), e);
                     }
                     return null;
                 }
@@ -502,17 +487,14 @@ public abstract class ClientNotifForwarder {
                     result = cnf.fetchNotifs(startSequenceNumber, 1, 0L);
                 } catch (Exception e) {
                     if (e instanceof ClassNotFoundException || e instanceof NotSerializableException) {
-                        logger.warning(
-                                "NotifFetcher.fetchOneNotif", "Failed to deserialize a notification: " + e.toString());
-                        if (logger.traceOn()) {
-                            logger.trace("NotifFetcher.fetchOneNotif", "Failed to deserialize a notification.", e);
-                        }
+                        LOG.log(Level.WARNING, "Failed to deserialize a notification: " + e.toString());
+                        LOG.log(Level.TRACE, "Failed to deserialize a notification.", e);
 
                         notFoundCount++;
                         startSequenceNumber++;
                     } else {
                         if (!shouldStop()) {
-                            logger.trace("NotifFetcher.fetchOneNotif", e);
+                            LOG.log(Level.TRACE, e.toString(), e);
                         }
                         return null;
                     }
@@ -603,9 +585,7 @@ public abstract class ClientNotifForwarder {
                     return;
                 }
 
-                if (logger.traceOn()) {
-                    logger.trace("init", "Initializing...");
-                }
+                LOG.log(Level.TRACE, "Initializing...");
 
                 // init the clientSequenceNumber if not reconnected.
                 if (!reconnected) {
@@ -614,8 +594,8 @@ public abstract class ClientNotifForwarder {
                         clientSequenceNumber = nr.getNextSequenceNumber();
                     } catch (ClassNotFoundException e) {
                         // can't happen
-                        logger.warning("init", "Impossible exception: " + e);
-                        logger.debug("init", e);
+                        LOG.log(Level.WARNING, "Impossible exception: " + e);
+                        LOG.log(Level.TRACE, e.toString(), e);
                     }
                 }
 
@@ -626,9 +606,7 @@ public abstract class ClientNotifForwarder {
                     final String msg = "Failed to register a listener to the mbean "
                             + "server: the client will not do clean when an MBean "
                             + "is unregistered";
-                    if (logger.traceOn()) {
-                        logger.trace("init", msg, e);
-                    }
+                    LOG.log(Level.TRACE, () -> msg, e);
                 }
 
                 setState(STARTING);
@@ -720,5 +698,5 @@ public abstract class ClientNotifForwarder {
      */
     private boolean beingReconnected = false;
 
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "ClientNotifForwarder");
+    private static final System.Logger LOG = System.getLogger(ClientNotifForwarder.class.getName());
 }

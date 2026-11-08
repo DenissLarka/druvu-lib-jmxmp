@@ -46,11 +46,10 @@
 
 package com.druvu.jmxmp.server.internal;
 
-import com.druvu.jmxmp.shared.ListenerInfo;
-import com.druvu.jmxmp.shared.NotificationBuffer;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.internal.ListenerInfo;
 import com.druvu.jmxmp.util.EnvHelp;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -76,9 +75,7 @@ public class ServerNotifForwarder {
     public Integer addNotificationListener(final ObjectName name, final NotificationFilter filter)
             throws InstanceNotFoundException, IOException {
 
-        if (logger.traceOn()) {
-            logger.trace("addNotificationListener", "Add a listener at " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Add a listener at " + name);
 
         checkState();
 
@@ -99,9 +96,7 @@ public class ServerNotifForwarder {
 
     public void removeNotificationListener(ObjectName name, Integer[] listenerIDs) throws Exception {
 
-        if (logger.traceOn()) {
-            logger.trace("removeNotificationListener", "Remove some listeners from " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Remove some listeners from " + name);
 
         checkState();
 
@@ -125,9 +120,7 @@ public class ServerNotifForwarder {
     public void removeNotificationListener(ObjectName name, Integer listenerID)
             throws InstanceNotFoundException, ListenerNotFoundException, IOException {
 
-        if (logger.traceOn()) {
-            logger.trace("removeNotificationListener", "Remove the listener " + listenerID + " from " + name);
-        }
+        LOG.log(Level.TRACE, () -> "Remove the listener " + listenerID + " from " + name);
 
         checkState();
 
@@ -145,9 +138,9 @@ public class ServerNotifForwarder {
     }
 
     public NotificationResult fetchNotifs(long startSequenceNumber, long timeout, int maxNotifications) {
-        if (logger.traceOn()) {
-            logger.trace(
-                    "fetchNotifs",
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(
+                    Level.TRACE,
                     "Fetching notifications, the " + "startSequenceNumber is "
                             + startSequenceNumber + ", the timeout is "
                             + timeout + ", the maxNotifications is "
@@ -162,17 +155,13 @@ public class ServerNotifForwarder {
             nr = new NotificationResult(0L, 0L, new TargetedNotification[0]);
         }
 
-        if (logger.traceOn()) {
-            logger.trace("fetchNotifs", "Forwarding the notifs: " + nr);
-        }
+        LOG.log(Level.TRACE, "Forwarding the notifs: {0}", nr);
 
         return nr;
     }
 
     public void terminate() {
-        if (logger.traceOn()) {
-            logger.trace("terminate", "Be called.");
-        }
+        LOG.log(Level.TRACE, "Be called.");
 
         synchronized (terminationLock) {
             if (terminated) {
@@ -186,9 +175,7 @@ public class ServerNotifForwarder {
             }
         }
 
-        if (logger.traceOn()) {
-            logger.trace("terminate", "Terminated.");
-        }
+        LOG.log(Level.TRACE, "Terminated.");
     }
 
     // ----------------
@@ -205,7 +192,7 @@ public class ServerNotifForwarder {
 
     private Integer getListenerID() {
         synchronized (listenerCounterLock) {
-            return new Integer(listenerCounter++);
+            return Integer.valueOf(listenerCounter++);
         }
     }
 
@@ -228,5 +215,5 @@ public class ServerNotifForwarder {
 
     static final String broadcasterClass = NotificationBroadcaster.class.getName();
 
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "ServerNotifForwarder");
+    private static final System.Logger LOG = System.getLogger(ServerNotifForwarder.class.getName());
 }

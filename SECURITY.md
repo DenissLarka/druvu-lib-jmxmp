@@ -22,7 +22,7 @@ This is maintained by a **single maintainer on a best-effort basis**. There is
   guaranteed within any fixed window.
 - The project may be declared end-of-life with a notice in this file and the
   README. If that happens, treat the last release as frozen and unmaintained.
-- The 2.0.0 **authorization layer** (`JmxmpAccessControl` SPI, the built-in
+- The 2.0.0 **authorization layer** (`JmxAccessControl` SPI, the built-in
   `policy()` RBAC, the `MBeanServerForwarder` enforcement path) and the
   `Subject.current()` propagation change are **new code in a
   security-critical position**, provided **as-is** and **not formally
@@ -45,8 +45,8 @@ library — vendor it, audit it yourself, and own the maintenance.
 | any earlier version       | ❌ not supported                      |
 | pre-release / `-SNAPSHOT` | ❌ not supported — not for production |
 
-The library is currently **pre-release** (not published to Maven Central). No
-version is under a support commitment until a `2.0.0` release is tagged.
+Releases are on Maven Central since `2.0.0`; the latest one is the supported
+one.
 
 ## Reporting a vulnerability
 
@@ -103,7 +103,9 @@ flipped by a system property, properties file, or the command line.
   fallbacks (a historical source of surprising behaviour) are gone. Baseline
   is Java 21.
 - **JPMS strong encapsulation.** Internal packages are not exported; only the
-  public `javax.management.remote.*` API and the SPI are reachable. A
+  public `javax.management.remote.*` API, the SPI and the fork's own API
+  (`com.druvu.jmxmp`, `com.druvu.jmxmp.server`, `com.druvu.jmxmp.access`) are
+  reachable; the protocol internals only from the client and server modules. A
   client-only deployment does not carry the server accept loop, and vice
   versa.
 - **Authorization fail-open eliminated.** Upstream OpenDMK's bundled file
@@ -185,13 +187,13 @@ What it does **not** protect against:
 Authorization is layered **on top of mandatory authentication**, not instead
 of it.
 
-- **Default semantics.** No `JmxmpAccessControl` under
-  `JmxmpAccessControl.ENV_KEY` ⇒ *authenticated-but-unrestricted*: every
+- **Default semantics.** No `JmxAccessControl` under
+  `JmxAccessControl.ENV_KEY` ⇒ *authenticated-but-unrestricted*: every
   authenticated subject may perform every operation **on existing MBeans**. This
   is the expected JMX default and is **not** a fail-open — identity is real and
   entry is gated by mandatory authentication. Supplying a control switches the
   server to **strict default-deny**: anything not explicitly granted is refused,
-  no fall-through. `JmxmpAccessControl.allowAll()` is an explicit, **code-only**
+  no fall-through. `JmxAccessControl.allowAll()` is an explicit, **code-only**
   "authenticated = unrestricted" sentinel; a non-typed value under the key is
   rejected at server start (fail closed) — it cannot be flipped by a property,
   file, or the command line (same typed-env guarantee as the client policy
@@ -287,11 +289,11 @@ unconditionally `TLS SASL/PLAIN` + `JMXAuthenticator`.
    password slot as a short-lived OAuth/JWT or HMAC ticket — see the README)
    so a leaked credential is not a reusable secret.
 4. **Configure authorization, least-privilege.** Authentication says *who*;
-   it does not say *what they may do*. Supply a `JmxmpAccessControl` — the
-   built-in `JmxmpAccessControl.policy()` RBAC or your own SPI — under
-   `JmxmpAccessControl.ENV_KEY`, or assemble the env with `JmxmpServerSecurity`.
+   it does not say *what they may do*. Supply a `JmxAccessControl` — the
+   built-in `JmxAccessControl.policy()` RBAC or your own SPI — under
+   `JmxAccessControl.ENV_KEY`, or assemble the env with `JmxmpServerSecurity`.
    Grant the **minimum** actions and `ObjectName` patterns each role needs;
-   keep patterns narrow; do not ship `JmxmpAccessControl.allowAll()` to
+   keep patterns narrow; do not ship `JmxAccessControl.allowAll()` to
    production. With a control configured the server is strict default-deny;
    a non-typed value under the key fails closed at start.
 5. **Constrain the network.** Bind to a specific interface or a trusted

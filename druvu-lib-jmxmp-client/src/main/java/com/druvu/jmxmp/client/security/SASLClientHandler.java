@@ -51,11 +51,9 @@
 package com.druvu.jmxmp.client.security;
 
 import com.druvu.jmxmp.client.generic.ProfileClient;
-import com.druvu.jmxmp.shared.SASLInputStream;
-import com.druvu.jmxmp.shared.SASLOutputStream;
-import com.druvu.jmxmp.shared.SocketConnectionIf;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.internal.SocketConnectionIf;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.Map;
@@ -88,9 +86,7 @@ public class SASLClientHandler implements ProfileClient {
 
     public void initialize(MessageConnection mc) throws IOException {
 
-        logger.trace("initialize", "starts");
-
-        this.mc = mc;
+        LOG.log(Level.TRACE, "starts");
 
         // Check if instance of SocketConnectionIf
         // and retrieve underlying socket
@@ -113,35 +109,29 @@ public class SASLClientHandler implements ProfileClient {
         if (server == null) {
             server = socket.getInetAddress().getHostName();
         }
-        if (logger.traceOn()) {
-            logger.trace(
-                    "initialize",
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(
+                    Level.TRACE,
                     "mech=" + mech + "; mechs=" + Arrays.asList(mechs) + "; authzId=" + authzId + "; server=" + server);
         }
 
         CallbackHandler cbh = null;
         if (env.containsKey("jmx.remote.sasl.callback.handler")) {
             cbh = (CallbackHandler) env.get("jmx.remote.sasl.callback.handler");
-            if (logger.traceOn()) {
-                logger.trace("initialize", "found callback.handler property: " + cbh);
-            }
+            LOG.log(Level.TRACE, "found callback.handler property: " + cbh);
         } else {
             if (env.containsKey("jmx.remote.credentials")) {
-                logger.trace("initialize", "found jmx.remote.credentials property");
+                LOG.log(Level.TRACE, "found jmx.remote.credentials property");
                 Object credso = env.get("jmx.remote.credentials");
                 if (!(credso instanceof String[])) {
-                    if (logger.traceOn()) {
-                        logger.trace("initialize", "...but it is not a String[]: " + credso);
-                    }
+                    LOG.log(Level.TRACE, () -> "...but it is not a String[]: " + credso);
                 } else {
                     String[] creds = (String[]) credso;
                     if (creds.length != 2) {
-                        if (logger.traceOn()) {
-                            logger.trace(
-                                    "initialize", "...but it does not have 2 " + "elements: " + Arrays.asList(creds));
-                        }
+                        LOG.log(Level.TRACE, () -> "...but it does not have 2 " + "elements: " + Arrays.asList(creds));
                     } else {
-                        cbh = new UserPasswordCallbackHandler(creds[0], creds[1]);
+                        ownHandler = new UserPasswordCallbackHandler(creds[0], creds[1]);
+                        cbh = ownHandler;
                     }
                 }
             }
@@ -167,10 +157,10 @@ public class SASLClientHandler implements ProfileClient {
             initialResponse = false;
         }
         SASLMessage response = new SASLMessage(mechanism, SASLMessage.CONTINUE, blob);
-        if (logger.traceOn()) {
-            logger.trace("produceMessage", ">>>>> SASL client message <<<<<");
-            logger.trace("produceMessage", "Profile Name : " + response.getProfileName());
-            logger.trace("produceMessage", "Status : " + response.getStatus());
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> SASL client message <<<<<");
+            LOG.log(Level.TRACE, "Profile Name : " + response.getProfileName());
+            LOG.log(Level.TRACE, "Status : " + response.getStatus());
         }
         return response;
     }
@@ -181,10 +171,10 @@ public class SASLClientHandler implements ProfileClient {
                     "Unexpected profile message type: " + pm.getClass().getName());
         }
         SASLMessage challenge = (SASLMessage) pm;
-        if (logger.traceOn()) {
-            logger.trace("consumeMessage", ">>>>> SASL server message <<<<<");
-            logger.trace("consumeMessage", "Profile Name : " + challenge.getProfileName());
-            logger.trace("consumeMessage", "Status : " + challenge.getStatus());
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> SASL server message <<<<<");
+            LOG.log(Level.TRACE, "Profile Name : " + challenge.getProfileName());
+            LOG.log(Level.TRACE, "Status : " + challenge.getStatus());
         }
         if (challenge.getStatus() != SASLMessage.CONTINUE && challenge.getStatus() != SASLMessage.COMPLETE) {
             throw new IOException("Unexpected SASL status [" + challenge.getStatus() + "]");
@@ -215,21 +205,21 @@ public class SASLClientHandler implements ProfileClient {
     }
 
     public void activate() throws IOException {
-        // If negotiated, integrity or privacy
-        //
-        String qop = (String) saslClnt.getNegotiatedProperty(Sasl.QOP);
-        if (qop != null && (qop.equalsIgnoreCase("auth-int") || qop.equalsIgnoreCase("auth-conf"))) {
-            // Replace the current input/output streams in
-            // MessageConnection by the SASL input/output streams
-            //
-            SASLInputStream saslis = new SASLInputStream(saslClnt, socket.getInputStream());
-            SASLOutputStream saslos = new SASLOutputStream(saslClnt, socket.getOutputStream());
-            ((SocketConnectionIf) mc).replaceStreams(saslis, saslos);
-        }
+        // PLAIN, the only mechanism this build accepts, negotiates no integrity or privacy layer:
+        // the streams stay as they are, inside the TLS the profile list puts first.
+        clearOwnPassword();
     }
 
     public void terminate() throws IOException {
         saslClnt.dispose();
+        clearOwnPassword();
+    }
+
+    /** The password handed to this handler lives no longer than the exchange that needed it. */
+    private void clearOwnPassword() {
+        if (ownHandler != null) {
+            ownHandler.clearPassword();
+        }
     }
 
     public String getName() {
@@ -280,10 +270,6 @@ public class SASLClientHandler implements ProfileClient {
             }
         }
 
-        protected void finalize() {
-            clearPassword();
-        }
-
         private String user;
         private char[] pwchars;
     }
@@ -297,10 +283,10 @@ public class SASLClientHandler implements ProfileClient {
     private boolean initialResponse = true;
     private byte[] blob = null;
     private Map env = null;
-    private MessageConnection mc = null;
     private Socket socket = null;
     private String mechanism = null;
+    private UserPasswordCallbackHandler ownHandler = null;
     private String profile = null;
     private static final byte[] EMPTY = new byte[0];
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "SASLClientHandler");
+    private static final System.Logger LOG = System.getLogger(SASLClientHandler.class.getName());
 }

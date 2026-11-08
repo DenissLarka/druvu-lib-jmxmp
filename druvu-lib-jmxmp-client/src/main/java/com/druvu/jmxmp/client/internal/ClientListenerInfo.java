@@ -46,7 +46,7 @@
 
 package com.druvu.jmxmp.client.internal;
 
-import com.druvu.jmxmp.shared.ListenerInfo;
+import com.druvu.jmxmp.internal.ListenerInfo;
 import javax.management.NotificationFilter;
 import javax.management.NotificationListener;
 import javax.management.ObjectName;

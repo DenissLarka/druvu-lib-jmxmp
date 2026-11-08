@@ -11,23 +11,25 @@
 
 package com.druvu.jmxmp.server.generic;
 
-import com.druvu.jmxmp.shared.ArrayNotificationBuffer;
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.JmxmpAccessControl;
-import com.druvu.jmxmp.shared.NotificationBuffer;
-import com.druvu.jmxmp.shared.ObjectWrappingImpl;
-import com.druvu.jmxmp.shared.ServerSynchroMessageConnection;
-import com.druvu.jmxmp.shared.SynchroMessageConnectionServer;
+import com.druvu.jmxmp.access.AccessControlledMBeanServer;
+import com.druvu.jmxmp.access.JmxAccessControl;
+import com.druvu.jmxmp.internal.DefaultConfig;
+import com.druvu.jmxmp.internal.ObjectWrappingImpl;
+import com.druvu.jmxmp.internal.ServerSynchroMessageConnection;
+import com.druvu.jmxmp.internal.SynchroMessageConnectionServer;
+import com.druvu.jmxmp.server.internal.ArrayNotificationBuffer;
+import com.druvu.jmxmp.server.internal.NotificationBuffer;
 import com.druvu.jmxmp.spi.GenericConnectorServerEngine;
 import com.druvu.jmxmp.spi.ServerConnectionCallback;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.util.ConnectorThreads;
 import com.druvu.jmxmp.util.EnvHelp;
-import com.druvu.jmxmp.util.ThreadService;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.remote.JMXConnectorServer;
@@ -61,15 +63,14 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
     private SynchroMessageConnectionServer sMsgServer;
     private ObjectWrapping objectWrapping;
     private ClassLoader defaultClassLoader = null;
-    private final ThreadService threads = new ThreadService(0, 10);
+    private final ExecutorService threads = ConnectorThreads.pool("server-accept", 10);
     private final ArrayList clientList = new ArrayList();
     private int state = CREATED;
     private final int[] lock = new int[0];
     private NotificationBuffer notifBuffer;
     private final Timer cancelConnecting = new Timer(true);
 
-    private static final ClassLogger logger =
-            new ClassLogger("com.druvu.jmxmp.server.generic", "GenericConnectorServerEngineImpl");
+    private static final System.Logger LOG = System.getLogger(GenericConnectorServerEngineImpl.class.getName());
 
     public GenericConnectorServerEngineImpl(
             JMXConnectorServer facade,
@@ -86,7 +87,7 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
 
     @Override
     public void start() throws IOException {
-        final boolean tracing = logger.traceOn();
+        final boolean tracing = LOG.isLoggable(Level.TRACE);
         synchronized (lock) {
             if (state == STARTED) {
                 return;
@@ -99,10 +100,10 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
                 throw new IllegalStateException("This connector server is not attached to an MBean server");
             }
 
-            // Authorization is opt-in via a typed, code-only JmxmpAccessControl
+            // Authorization is opt-in via a typed, code-only JmxAccessControl
             // under ENV_KEY: absent ⇒ allowAll (authenticated-but-unrestricted;
             // authn is already mandatory); an instance ⇒ enforced per operation;
-            // a non-JmxmpAccessControl value (e.g. a String from -D/props) ⇒ fail
+            // a non-JmxAccessControl value (e.g. a String from -D/props) ⇒ fail
             // CLOSED at server start, so the code-only guarantee is enforced, not
             // merely documented. The legacy "jmx.remote.x.access.file" mechanism
             // is gone (MBeanServerFileAccessController hard-deleted).
@@ -112,15 +113,15 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
             // remote MBean lifecycle/deserialization regardless of the configured
             // control. That denial must be an invariant of every secured server,
             // not a function of whether a policy happens to be supplied.
-            Object acValue = (env != null) ? env.get(JmxmpAccessControl.ENV_KEY) : null;
-            JmxmpAccessControl accessControl;
+            Object acValue = (env != null) ? env.get(JmxAccessControl.ENV_KEY) : null;
+            JmxAccessControl accessControl;
             if (acValue == null) {
-                accessControl = JmxmpAccessControl.allowAll();
-            } else if (acValue instanceof JmxmpAccessControl supplied) {
+                accessControl = JmxAccessControl.allowAll();
+            } else if (acValue instanceof JmxAccessControl supplied) {
                 accessControl = supplied;
             } else {
-                throw new SecurityException(JmxmpAccessControl.ENV_KEY
-                        + " must be a code-supplied JmxmpAccessControl instance, but was "
+                throw new SecurityException(JmxAccessControl.ENV_KEY
+                        + " must be a code-supplied JmxAccessControl instance, but was "
                         + acValue.getClass().getName());
             }
             facade.setMBeanServerForwarder(new AccessControlledMBeanServer(accessControl));
@@ -159,7 +160,7 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
 
             state = STARTED;
             if (tracing) {
-                logger.trace("start", "Connector Server Address = " + sMsgServer.getAddress());
+                LOG.log(Level.TRACE, "Connector Server Address = " + sMsgServer.getAddress());
             }
 
             receiver = new Receiver();
@@ -169,7 +170,7 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
 
     @Override
     public void stop() throws IOException {
-        final boolean debug = logger.debugOn();
+        final boolean debug = LOG.isLoggable(Level.TRACE);
         synchronized (lock) {
             if (state == STOPPED) {
                 return;
@@ -184,16 +185,16 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
                     ServerIntermediary inter = (ServerIntermediary) clientList.remove(0);
                     inter.terminate();
                 } catch (Exception e) {
-                    logger.warning("stop", "Failed to stop client: " + e);
+                    LOG.log(Level.WARNING, "Failed to stop client: " + e);
                     if (debug) {
-                        logger.debug("stop", e);
+                        LOG.log(Level.TRACE, e.toString(), e);
                     }
                 }
             }
             if (notifBuffer != null) {
                 notifBuffer.dispose();
             }
-            threads.terminate();
+            ConnectorThreads.stop(threads);
         }
         cancelConnecting.cancel();
     }
@@ -259,25 +260,25 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
 
         public void run() {
             while (isActive()) {
-                final boolean tracing = logger.traceOn();
-                final boolean debug = logger.debugOn();
+                final boolean tracing = LOG.isLoggable(Level.TRACE);
+                final boolean debug = LOG.isLoggable(Level.TRACE);
                 ServerSynchroMessageConnection connection;
 
                 try {
                     connection = sMsgServer.accept();
                 } catch (IOException ioe) {
                     if (isActive()) {
-                        logger.error("Receiver.run", "Unexpected IOException: " + ioe);
+                        LOG.log(Level.ERROR, "Unexpected IOException: " + ioe);
                         if (debug) {
-                            logger.debug("Receiver.run", ioe);
+                            LOG.log(Level.TRACE, ioe.toString(), ioe);
                         }
                         try {
                             GenericConnectorServerEngineImpl.this.stop();
                         } catch (IOException ie) {
-                            logger.warning("Receiver.run", "Failed to stop server: " + ie);
+                            LOG.log(Level.WARNING, "Failed to stop server: " + ie);
                         }
                     } else if (tracing) {
-                        logger.trace("Receiver.run", "interrupted: " + ioe);
+                        LOG.log(Level.TRACE, "interrupted: " + ioe);
                     }
                     break;
                 }
@@ -288,11 +289,11 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
 
                 ClientCreation cc = new ClientCreation(connection);
                 if (connectingTimeout <= 0) {
-                    threads.handoff(cc);
+                    threads.execute(cc);
                 } else {
                     ConnectingStopper stopper = new ConnectingStopper(cc);
                     cc.setStopper(stopper);
-                    threads.handoff(cc);
+                    threads.execute(cc);
                     cancelConnecting.schedule(stopper, connectingTimeout);
                 }
             }
@@ -313,7 +314,7 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
         }
 
         public void run() {
-            final boolean tracing = logger.traceOn();
+            final boolean tracing = LOG.isLoggable(Level.TRACE);
             Subject subject = null;
             boolean failed = false;
 
@@ -322,13 +323,11 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
                 subject = connection.getSubject();
             } catch (Throwable e) {
                 failed = true;
-                logger.warning("ClientCreation.run", "Failed to open connection: " + e, e);
+                LOG.log(Level.WARNING, "Failed to open connection: " + e, e);
                 try {
                     connection.close();
                 } catch (Exception ee) {
-                    if (logger.debugOn()) {
-                        logger.debug("ClientCreation.run", "Failed to cleanup: " + ee);
-                    }
+                    LOG.log(Level.TRACE, () -> "Failed to cleanup: " + ee);
                 }
             }
 
@@ -360,9 +359,7 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
                     try {
                         inter.terminate();
                     } catch (Exception e) {
-                        if (logger.debugOn()) {
-                            logger.debug("ClientCreation.run", "Failed to cleanup: " + e);
-                        }
+                        LOG.log(Level.TRACE, () -> "Failed to cleanup: " + e);
                     }
                     return;
                 }
@@ -393,9 +390,7 @@ public final class GenericConnectorServerEngineImpl implements GenericConnectorS
             try {
                 cc.connection.close();
             } catch (Exception e) {
-                if (logger.debugOn()) {
-                    logger.debug("ConnectingStopper.run", e);
-                }
+                LOG.log(Level.TRACE, () -> e.toString(), e);
             }
         }
     }

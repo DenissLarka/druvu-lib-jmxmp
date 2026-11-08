@@ -23,6 +23,7 @@ final class TestPaths {
 
     static final String CLIENT_CLASS = "com.druvu.jmxmp.client.generic.GenericConnectorEngineImpl";
     static final String SERVER_CLASS = "com.druvu.jmxmp.server.generic.GenericConnectorServerEngineImpl";
+    static final String ACCESS_CLASS = "com.druvu.jmxmp.access.JmxAccessControl";
 
     /** Resolve the jar that supplies {@code className}. */
     static Path jarOf(String className) throws Exception {
@@ -43,6 +44,9 @@ final class TestPaths {
         }
         if (className.equals(SERVER_CLASS)) {
             return "druvu-lib-jmxmp-server";
+        }
+        if (className.equals(ACCESS_CLASS)) {
+            return "druvu-lib-jmxmp-access";
         }
         return "druvu-lib-jmxmp-common";
     }

@@ -23,17 +23,18 @@
 
 package javax.management.remote.generic;
 
-import com.druvu.jmxmp.shared.CheckProfiles;
+import com.druvu.jmxmp.internal.CheckProfiles;
 import com.druvu.jmxmp.spi.EngineCallback;
 import com.druvu.jmxmp.spi.GenericConnectorEngine;
 import com.druvu.jmxmp.spi.GenericConnectorEngineProvider;
-import com.druvu.jmxmp.util.ThreadService;
+import com.druvu.jmxmp.util.ConnectorThreads;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.concurrent.ExecutorService;
 import javax.management.ListenerNotFoundException;
 import javax.management.MBeanServerConnection;
 import javax.management.Notification;
@@ -64,7 +65,7 @@ public class GenericConnector implements JMXConnector, Serializable {
 
     private transient GenericConnectorEngine engine;
     private transient NotificationBroadcasterSupport connectionBroadcaster;
-    private transient ThreadService notifThread;
+    private transient ExecutorService notifThread;
     private transient Map env;
 
     /** Default no-arg constructor (needed for subclass serialization). */
@@ -112,7 +113,7 @@ public class GenericConnector implements JMXConnector, Serializable {
                 connectionBroadcaster = new NotificationBroadcasterSupport();
             }
             if (notifThread == null) {
-                notifThread = new ThreadService(0, 1);
+                notifThread = ConnectorThreads.single("client-notifications");
             }
             if (engine == null) {
                 GenericConnectorEngineProvider provider = ServiceLoader.load(GenericConnectorEngineProvider.class)
@@ -140,10 +141,20 @@ public class GenericConnector implements JMXConnector, Serializable {
     }
 
     public MBeanServerConnection getMBeanServerConnection() throws IOException {
-        return getMBeanServerConnection(null);
+        return connection(null);
     }
 
+    /**
+     * Subject delegation, deprecated for removal by the JDK as on {@link JMXConnector}; the server refuses a delegation
+     * subject.
+     */
+    @Deprecated(since = "3.0.0", forRemoval = true)
+    @SuppressWarnings("removal") // overrides JMXConnector's, which the JDK marked for removal
     public MBeanServerConnection getMBeanServerConnection(Subject delegationSubject) throws IOException {
+        return connection(delegationSubject);
+    }
+
+    private MBeanServerConnection connection(Subject delegationSubject) throws IOException {
         if (engine == null) {
             throw new IOException("The client has not been connected.");
         }
@@ -196,7 +207,7 @@ public class GenericConnector implements JMXConnector, Serializable {
             }
         };
         if (notifThread != null) {
-            notifThread.handoff(job);
+            notifThread.execute(job);
         } else {
             job.run();
         }

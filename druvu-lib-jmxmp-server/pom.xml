@@ -7,7 +7,7 @@
 	<parent>
 		<groupId>com.druvu</groupId>
 		<artifactId>druvu-lib-jmxmp</artifactId>
-		<version>2.0.1-SNAPSHOT</version>
+		<version>3.0.0-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
@@ -20,6 +20,13 @@
 		<dependency>
 			<groupId>com.druvu</groupId>
 			<artifactId>druvu-lib-jmxmp-common</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<!-- Compile scope on purpose: the configuration API takes a JmxAccessControl,
+		     so a consumer of the server needs the access module too. -->
+		<dependency>
+			<groupId>com.druvu</groupId>
+			<artifactId>druvu-lib-jmxmp-access</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 	</dependencies>

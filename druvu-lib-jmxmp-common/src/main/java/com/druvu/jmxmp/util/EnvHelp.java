@@ -49,6 +49,7 @@ package com.druvu.jmxmp.util;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.lang.System.Logger.Level;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -229,8 +230,8 @@ public class EnvHelp {
                 }
             }
         } catch (RuntimeException e) {
-            logger.warning("getNotifBufferSize", "Can't use System property " + BUFFER_SIZE_PROPERTY + ": " + e);
-            logger.debug("getNotifBufferSize", e);
+            LOG.log(Level.WARNING, "Can't use System property " + BUFFER_SIZE_PROPERTY + ": " + e);
+            LOG.log(Level.TRACE, e.toString(), e);
         }
 
         int queueSize = defaultQueueSize;
@@ -243,8 +244,8 @@ public class EnvHelp {
                 queueSize = (int) EnvHelp.getIntegerAttribute(env, oldP, defaultQueueSize, 0, Integer.MAX_VALUE);
             }
         } catch (RuntimeException e) {
-            logger.warning("getNotifBufferSize", "Can't determine queuesize (using default): " + e);
-            logger.debug("getNotifBufferSize", e);
+            LOG.log(Level.WARNING, "Can't determine queuesize (using default): " + e);
+            LOG.log(Level.TRACE, e.toString(), e);
         }
 
         return queueSize;
@@ -334,9 +335,7 @@ public class EnvHelp {
     jmx.remote.x.hidden.attributes or the default list of hidden
     attributes.  */
     public static Map filterAttributes(Map attributes) {
-        if (logger.traceOn()) {
-            logger.trace("filterAttributes", "starts");
-        }
+        LOG.log(Level.TRACE, "starts");
 
         SortedMap map = new TreeMap(attributes);
         purgeUnserializable(map.values());
@@ -346,16 +345,14 @@ public class EnvHelp {
 
     /** Remove from the given Collection any element that is not a serializable object. */
     private static void purgeUnserializable(Collection objects) {
-        logger.trace("purgeUnserializable", "starts");
+        LOG.log(Level.TRACE, "starts");
         ObjectOutputStream oos = null;
         int i = 0;
         for (Iterator it = objects.iterator(); it.hasNext(); i++) {
             Object v = it.next();
 
             if (v == null || v instanceof String) {
-                if (logger.traceOn()) {
-                    logger.trace("purgeUnserializable", "Value trivially serializable: " + v);
-                }
+                LOG.log(Level.TRACE, () -> "Value trivially serializable: " + v);
                 continue;
             }
 
@@ -364,13 +361,9 @@ public class EnvHelp {
                     oos = new ObjectOutputStream(new SinkOutputStream());
                 }
                 oos.writeObject(v);
-                if (logger.traceOn()) {
-                    logger.trace("purgeUnserializable", "Value serializable: " + v);
-                }
+                LOG.log(Level.TRACE, () -> "Value serializable: " + v);
             } catch (IOException e) {
-                if (logger.traceOn()) {
-                    logger.trace("purgeUnserializable", "Value not serializable: " + v + ": " + e);
-                }
+                LOG.log(Level.TRACE, () -> "Value not serializable: " + v + ": " + e);
                 it.remove();
                 oos = null; // ObjectOutputStream invalid after exception
             }
@@ -555,5 +548,5 @@ public class EnvHelp {
         public void write(int b) {}
     }
 
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "EnvHelp");
+    private static final System.Logger LOG = System.getLogger(EnvHelp.class.getName());
 }

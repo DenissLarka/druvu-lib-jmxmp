@@ -1,9 +1,9 @@
 package com.druvu.jmxmp.server.security;
 
-import com.druvu.jmxmp.util.ClassLogger;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.System.Logger.Level;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
@@ -31,7 +31,7 @@ import javax.net.ssl.TrustManagerFactory;
  */
 final class SelfSignedTls {
 
-    private static final ClassLogger LOG = new ClassLogger("javax.management.remote.misc", "SelfSignedTls");
+    private static final System.Logger LOG = System.getLogger(SelfSignedTls.class.getName());
     private static final String STORE_PASSWORD = "changeit";
     private static final String ALIAS = "druvu-jmxmp-ephemeral";
 
@@ -68,8 +68,8 @@ final class SelfSignedTls {
             tmf.init(ks);
             SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-            LOG.info(
-                    "socketFactory",
+            LOG.log(
+                    Level.INFO,
                     "druvu-lib-jmxmp: no 'jmx.remote.tls.socket.factory' configured — generated an EPHEMERAL "
                             + "self-signed TLS certificate for this JVM. The JMXMP listener is encrypted, but the "
                             + "certificate is not verifiable by clients (encryption only, no server-identity / MITM "

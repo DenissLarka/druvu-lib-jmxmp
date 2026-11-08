@@ -2,10 +2,11 @@
  * Validation — modular deployment-shape resolution (OS-agnostic, no shell).
  *
  * Reimplements the former module-graphs.sh in pure Java. Proves the
- * three-module graph degrades correctly when only part of it is present:
+ * module graph degrades correctly when only part of it is present:
  *
- *   client-only  : {common, client} resolves WITHOUT server
- *   server-only  : {common, server} resolves WITHOUT client
+ *   client-only  : {common, client} resolves WITHOUT server and WITHOUT access
+ *   server-only  : {common, access, server} resolves WITHOUT client
+ *   access-only  : {access} resolves alone — it never needs common
  *   common-only  : a consumer seeing only `common` gets the documented
  *                  "add com.druvu.jmxmp.client to the module path"
  *                  IllegalStateException — no silent failure
@@ -52,21 +53,38 @@ public class DeploymentShapesIT {
         assertTrue(cf.findModule("com.druvu.jmxmp.common").isPresent(), "common pulled in transitively");
         assertTrue(
                 cf.findModule("com.druvu.jmxmp.server").isEmpty(), "server must NOT be required by the client closure");
+        assertTrue(
+                cf.findModule("com.druvu.jmxmp.access").isEmpty(), "access must NOT be required by the client closure");
     }
 
     @Test
     public void serverResolvesWithoutClient() throws Exception {
         Path common = TestPaths.jarOf(TestPaths.COMMON_CLASS);
+        Path access = TestPaths.jarOf(TestPaths.ACCESS_CLASS);
         Path server = TestPaths.jarOf(TestPaths.SERVER_CLASS);
         Configuration cf = Configuration.resolve(
-                ModuleFinder.of(common, server),
+                ModuleFinder.of(common, access, server),
                 List.of(Configuration.empty()),
                 ModuleFinder.ofSystem(),
                 List.of("com.druvu.jmxmp.server"));
         assertTrue(cf.findModule("com.druvu.jmxmp.server").isPresent(), "server must resolve");
         assertTrue(cf.findModule("com.druvu.jmxmp.common").isPresent(), "common pulled in transitively");
+        assertTrue(cf.findModule("com.druvu.jmxmp.access").isPresent(), "access pulled in transitively");
         assertTrue(
                 cf.findModule("com.druvu.jmxmp.client").isEmpty(), "client must NOT be required by the server closure");
+    }
+
+    /** The access module is transport-neutral: it resolves with nothing but the JDK on the path. */
+    @Test
+    public void accessResolvesAlone() throws Exception {
+        Path access = TestPaths.jarOf(TestPaths.ACCESS_CLASS);
+        Configuration cf = Configuration.resolve(
+                ModuleFinder.of(access),
+                List.of(Configuration.empty()),
+                ModuleFinder.ofSystem(),
+                List.of("com.druvu.jmxmp.access"));
+        assertTrue(cf.findModule("com.druvu.jmxmp.access").isPresent(), "access must resolve on its own");
+        assertTrue(cf.findModule("com.druvu.jmxmp.common").isEmpty(), "access must NOT require the protocol module");
     }
 
     @Test

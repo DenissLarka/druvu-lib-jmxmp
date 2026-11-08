@@ -50,10 +50,10 @@
 
 package com.druvu.jmxmp.server.security;
 
+import com.druvu.jmxmp.internal.SocketConnectionIf;
 import com.druvu.jmxmp.server.generic.ProfileServer;
-import com.druvu.jmxmp.shared.SocketConnectionIf;
-import com.druvu.jmxmp.util.ClassLogger;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.net.Socket;
 import java.security.Principal;
 import java.security.cert.Certificate;
@@ -123,18 +123,16 @@ public class TLSServerHandler implements ProfileServer {
 
         String hostname = socket.getInetAddress().getHostName();
         int port = socket.getPort();
-        if (logger.traceOn()) {
-            logger.trace("initialize", "TLS: Hostname = " + hostname);
-            logger.trace("initialize", "TLS: Port = " + port);
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, "TLS: Hostname = " + hostname);
+            LOG.log(Level.TRACE, "TLS: Port = " + port);
         }
         ts = (SSLSocket) ssf.createSocket(socket, hostname, port, true);
 
         // Set the SSLSocket Client Mode
         //
         ts.setUseClientMode(false);
-        if (logger.traceOn()) {
-            logger.trace("initialize", "TLS: Socket Client Mode = " + ts.getUseClientMode());
-        }
+        LOG.log(Level.TRACE, () -> "TLS: Socket Client Mode = " + ts.getUseClientMode());
 
         // Set the SSLSocket Enabled Protocols
         //
@@ -152,8 +150,8 @@ public class TLSServerHandler implements ProfileServer {
                 enabledProtocolsList[i] = st.nextToken();
             }
             ts.setEnabledProtocols(enabledProtocolsList);
-            if (logger.traceOn()) {
-                logger.trace("initialize", "TLS: Enabled Protocols");
+            if (LOG.isLoggable(Level.TRACE)) {
+                LOG.log(Level.TRACE, "TLS: Enabled Protocols");
                 String[] enabled_p = ts.getEnabledProtocols();
                 if (enabled_p != null) {
                     StringBuffer str_buffer = new StringBuffer();
@@ -163,9 +161,9 @@ public class TLSServerHandler implements ProfileServer {
                             str_buffer.append(", ");
                         }
                     }
-                    logger.trace("initialize", "TLS: [" + str_buffer + "]");
+                    LOG.log(Level.TRACE, "TLS: [" + str_buffer + "]");
                 } else {
-                    logger.trace("initialize", "TLS: []");
+                    LOG.log(Level.TRACE, "TLS: []");
                 }
             }
         }
@@ -182,8 +180,8 @@ public class TLSServerHandler implements ProfileServer {
             }
             ts.setEnabledCipherSuites(enabledCipherSuitesList);
         }
-        if (logger.traceOn()) {
-            logger.trace("initialize", "TLS: Enabled Cipher Suites");
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, "TLS: Enabled Cipher Suites");
             String[] enabled_cs = ts.getEnabledCipherSuites();
             if (enabled_cs != null) {
                 StringBuffer str_buffer = new StringBuffer();
@@ -193,9 +191,9 @@ public class TLSServerHandler implements ProfileServer {
                         str_buffer.append(", ");
                     }
                 }
-                logger.trace("initialize", "TLS: [" + str_buffer + "]");
+                LOG.log(Level.TRACE, "TLS: [" + str_buffer + "]");
             } else {
-                logger.trace("initialize", "TLS: []");
+                LOG.log(Level.TRACE, "TLS: []");
             }
         }
 
@@ -205,9 +203,7 @@ public class TLSServerHandler implements ProfileServer {
         if (needClientAuth != null) {
             ts.setNeedClientAuth(Boolean.valueOf(needClientAuth).booleanValue());
         }
-        if (logger.traceOn()) {
-            logger.trace("initialize", "TLS: Socket Need Client Authentication = " + ts.getNeedClientAuth());
-        }
+        LOG.log(Level.TRACE, () -> "TLS: Socket Need Client Authentication = " + ts.getNeedClientAuth());
 
         // Configures the socket to request client authentication
         //
@@ -216,18 +212,16 @@ public class TLSServerHandler implements ProfileServer {
             if (wantClientAuth != null) {
                 ts.setWantClientAuth(Boolean.parseBoolean(wantClientAuth));
             }
-            if (logger.traceOn()) {
-                logger.trace("initialize", "TLS: Socket Want Client Authentication = " + ts.getWantClientAuth());
-            }
+            LOG.log(Level.TRACE, () -> "TLS: Socket Want Client Authentication = " + ts.getWantClientAuth());
         }
     }
 
     public ProfileMessage produceMessage() {
         TLSMessage tlspm = new TLSMessage(TLSMessage.PROCEED);
-        if (logger.traceOn()) {
-            logger.trace("produceMessage", ">>>>> TLS server message <<<<<");
-            logger.trace("produceMessage", "Profile Name : " + tlspm.getProfileName());
-            logger.trace("produceMessage", "Status : " + tlspm.getStatus());
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> TLS server message <<<<<");
+            LOG.log(Level.TRACE, "Profile Name : " + tlspm.getProfileName());
+            LOG.log(Level.TRACE, "Status : " + tlspm.getStatus());
         }
         completed = true;
         return tlspm;
@@ -239,10 +233,10 @@ public class TLSServerHandler implements ProfileServer {
                     "Unexpected profile message type: " + pm.getClass().getName());
         }
         TLSMessage tlspm = (TLSMessage) pm;
-        if (logger.traceOn()) {
-            logger.trace("consumeMessage", ">>>>> TLS client message <<<<<");
-            logger.trace("consumeMessage", "Profile Name : " + tlspm.getProfileName());
-            logger.trace("consumeMessage", "Status : " + tlspm.getStatus());
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> TLS client message <<<<<");
+            LOG.log(Level.TRACE, "Profile Name : " + tlspm.getProfileName());
+            LOG.log(Level.TRACE, "Status : " + tlspm.getStatus());
         }
         if (tlspm.getStatus() != TLSMessage.READY) {
             throw new IOException("Unexpected TLS status [" + tlspm.getStatus() + "]");
@@ -254,18 +248,18 @@ public class TLSServerHandler implements ProfileServer {
     }
 
     public Subject activate() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("activate", ">>>>> TLS handshake <<<<<");
-            logger.trace("activate", "TLS: Start TLS Handshake");
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> TLS handshake <<<<<");
+            LOG.log(Level.TRACE, "TLS: Start TLS Handshake");
         }
         ts.startHandshake();
         SSLSession session = ts.getSession();
         if (session != null) {
-            if (logger.traceOn()) {
-                logger.trace("activate", "TLS: getCipherSuite = " + session.getCipherSuite());
-                logger.trace("activate", "TLS: getPeerHost = " + session.getPeerHost());
+            if (LOG.isLoggable(Level.TRACE)) {
+                LOG.log(Level.TRACE, "TLS: getCipherSuite = " + session.getCipherSuite());
+                LOG.log(Level.TRACE, "TLS: getPeerHost = " + session.getPeerHost());
                 {
-                    logger.trace("activate", "TLS: getProtocol = " + session.getProtocol());
+                    LOG.log(Level.TRACE, "TLS: getProtocol = " + session.getProtocol());
                 }
             }
             // Retrieve the subject distinguished name from the client's
@@ -282,14 +276,14 @@ public class TLSServerHandler implements ProfileServer {
                         subject = new Subject();
                     }
                     subject.getPrincipals().add(principal);
-                    logger.trace("activate", "TLS: Client Authentication OK!" + " SubjectDN = " + principal);
+                    LOG.log(Level.TRACE, "TLS: Client Authentication OK!" + " SubjectDN = " + principal);
                 } else {
-                    logger.trace("activate", "TLS: No Client Authentication");
+                    LOG.log(Level.TRACE, "TLS: No Client Authentication");
                 }
             } catch (SSLPeerUnverifiedException e) {
-                logger.trace("activate", "TLS: No Client Authentication: " + e.getMessage());
+                LOG.log(Level.TRACE, "TLS: No Client Authentication: " + e.getMessage());
             }
-            logger.trace("activate", "TLS: Finish TLS Handshake");
+            LOG.log(Level.TRACE, "TLS: Finish TLS Handshake");
         }
 
         // Set new TLS socket in MessageConnection
@@ -322,5 +316,5 @@ public class TLSServerHandler implements ProfileServer {
     private MessageConnection mc = null;
     private String profile = null;
     private Subject subject = null;
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "TLSServerHandler");
+    private static final System.Logger LOG = System.getLogger(TLSServerHandler.class.getName());
 }

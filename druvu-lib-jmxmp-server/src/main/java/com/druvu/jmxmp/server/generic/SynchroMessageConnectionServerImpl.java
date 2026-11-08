@@ -50,13 +50,12 @@
 
 package com.druvu.jmxmp.server.generic;
 
-import com.druvu.jmxmp.server.security.AdminServer;
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.ServerAdmin;
-import com.druvu.jmxmp.shared.ServerSynchroMessageConnection;
-import com.druvu.jmxmp.shared.SynchroMessageConnectionServer;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.internal.ServerSynchroMessageConnection;
+import com.druvu.jmxmp.internal.SynchroMessageConnectionServer;
+import com.druvu.jmxmp.server.internal.ServerAdmin;
+import com.druvu.jmxmp.server.internal.ServerConfig;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.util.Map;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.generic.MessageConnectionServer;
@@ -70,29 +69,23 @@ public class SynchroMessageConnectionServerImpl implements SynchroMessageConnect
         this.msServer = msServer;
         this.env = env;
 
-        this.serverAdmin = DefaultConfig.getServerAdmin(this.env, () -> new AdminServer(this.env));
+        this.serverAdmin = ServerConfig.getServerAdmin(this.env);
     }
 
     public void start(Map env) throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("start", "Starts a SynchroMessageConnectionServerImpl.");
-        }
+        LOG.log(Level.TRACE, "Starts a SynchroMessageConnectionServerImpl.");
 
         msServer.start(env);
     }
 
     public ServerSynchroMessageConnection accept() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("accept", "Waiting a coming client...");
-        }
+        LOG.log(Level.TRACE, "Waiting a coming client...");
 
         return new ServerSynchroMessageConnectionImpl(msServer.accept(), env);
     }
 
     public void stop() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("stop", "Stops a SynchroMessageConnectionServerImpl object.");
-        }
+        LOG.log(Level.TRACE, "Stops a SynchroMessageConnectionServerImpl object.");
 
         msServer.stop();
     }
@@ -111,6 +104,5 @@ public class SynchroMessageConnectionServerImpl implements SynchroMessageConnect
 
     private final ServerAdmin serverAdmin;
 
-    private final ClassLogger logger =
-            new ClassLogger("javax.management.remote.misc", "SynchroMessageConnectionServerImpl");
+    private static final System.Logger LOG = System.getLogger(SynchroMessageConnectionServerImpl.class.getName());
 }

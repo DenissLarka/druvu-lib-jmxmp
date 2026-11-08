@@ -7,16 +7,18 @@
 	<parent>
 		<groupId>com.druvu</groupId>
 		<artifactId>druvu-lib-jmxmp</artifactId>
-		<version>2.0.1-SNAPSHOT</version>
+		<version>3.0.0-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
 	<artifactId>druvu-lib-jmxmp-common</artifactId>
 	<name>druvu-lib-jmxmp-common</name>
 	<packaging>jar</packaging>
-	<description>Public OpenDMK JMXMP API (javax.management.remote.*, FQN-frozen) plus shared runtime — the foundation module required by both the client and server.</description>
+	<description>Public OpenDMK JMXMP API (javax.management.remote.*, FQN-frozen), the configuration both ends share (com.druvu.jmxmp) and the protocol internals — the foundation module required by both the client and server.</description>
 
 	<!-- Public OpenDMK API (javax.management.remote.*, FQN-frozen) +
-	     renamed com.druvu.jmxmp.* internals (util, shared, spi). -->
+	     com.druvu.jmxmp (the shared configuration, exported), spi (the engine
+	     seam, exported), internal + util (the protocol's own, exported to the
+	     client and server modules only). -->
 
 </project>

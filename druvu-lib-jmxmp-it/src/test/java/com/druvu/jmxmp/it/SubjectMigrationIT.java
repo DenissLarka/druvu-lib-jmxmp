@@ -4,8 +4,8 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.expectThrows;
 
-import com.druvu.jmxmp.shared.JmxAction;
-import com.druvu.jmxmp.shared.JmxmpAccessControl;
+import com.druvu.jmxmp.access.JmxAccessControl;
+import com.druvu.jmxmp.access.JmxAction;
 import java.util.HashMap;
 import java.util.Map;
 import javax.management.MBeanServer;
@@ -37,13 +37,13 @@ import org.testng.annotations.Test;
  */
 public class SubjectMigrationIT {
 
-    private Map<String, Object> serverEnv(TestAuthenticator auth, JmxmpAccessControl ac) throws Exception {
+    private Map<String, Object> serverEnv(TestAuthenticator auth, JmxAccessControl ac) throws Exception {
         Map<String, Object> env = new HashMap<>();
         env.put("jmx.remote.profiles", "TLS SASL/PLAIN");
         env.put("jmx.remote.tls.socket.factory", TlsTestSupport.socketFactory());
         env.put(JMXConnectorServer.AUTHENTICATOR, auth);
         if (ac != null) {
-            env.put(JmxmpAccessControl.ENV_KEY, ac);
+            env.put(JmxAccessControl.ENV_KEY, ac);
         }
         return env;
     }
@@ -86,7 +86,7 @@ public class SubjectMigrationIT {
         mbs.registerMBean(new Echo(), name);
         TestAuthenticator auth = new TestAuthenticator(Map.of("admin", "s3cr3t"));
 
-        JmxmpAccessControl ac = JmxmpAccessControl.policy()
+        JmxAccessControl ac = JmxAccessControl.policy()
                 .role("r")
                 .allow(JmxAction.READ, "*")
                 .principal("admin")
@@ -117,7 +117,7 @@ public class SubjectMigrationIT {
         TestAuthenticator auth = new TestAuthenticator(Map.of("admin", "s3cr3t"));
 
         // admin is authenticated and mapped to a role, but the role does NOT grant READ (only INVOKE).
-        JmxmpAccessControl ac = JmxmpAccessControl.policy()
+        JmxAccessControl ac = JmxAccessControl.policy()
                 .role("r")
                 .allow(JmxAction.INVOKE, "*")
                 .principal("admin")

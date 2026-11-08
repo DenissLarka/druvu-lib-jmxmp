@@ -23,7 +23,7 @@
 
 package javax.management.remote.generic;
 
-import com.druvu.jmxmp.shared.CheckProfiles;
+import com.druvu.jmxmp.internal.CheckProfiles;
 import com.druvu.jmxmp.spi.GenericConnectorServerEngine;
 import com.druvu.jmxmp.spi.GenericConnectorServerEngineProvider;
 import com.druvu.jmxmp.spi.ServerConnectionCallback;

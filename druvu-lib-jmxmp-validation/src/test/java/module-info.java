@@ -12,7 +12,6 @@ open module com.druvu.jmxmp.validation {
     requires com.druvu.jmxmp.client;
     requires com.druvu.jmxmp.server;
     requires java.management;
-    requires java.security.sasl;
     requires org.testng;
 
     // The matrix asserts provider discovery via ServiceLoader

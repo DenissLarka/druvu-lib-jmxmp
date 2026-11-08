@@ -53,8 +53,8 @@
 package com.druvu.jmxmp.server.security;
 
 import com.druvu.jmxmp.server.generic.ProfileServer;
-import com.druvu.jmxmp.util.ClassLogger;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -77,8 +77,8 @@ import javax.security.auth.Subject;
  * challenge rounds, so the server side is parsed directly here and the {@code authcid}/{@code passwd} pair is handed to
  * the mandatory authenticator. OpenDMK's {@link SASLMessage} profile transport is unchanged.
  *
- * <p>Only PLAIN is accepted. {@code CheckProfiles} already rejects every other mechanism at construction / handshake
- * time; this class refuses non-PLAIN as defence in depth.
+ * <p>Only PLAIN is accepted. {@code CheckProfiles} rejects every other mechanism in the configured set at construction
+ * and checks the run set at the end of the handshake; while the handshake runs, this class is the gate.
  */
 public class SASLServerHandler implements ProfileServer {
 
@@ -99,8 +99,7 @@ public class SASLServerHandler implements ProfileServer {
         this.mc = mc;
         this.subject = s;
 
-        // Defence in depth: only SASL/PLAIN. Anything else is a protocol
-        // violation now (CheckProfiles already gates this earlier).
+        // Only SASL/PLAIN. While the handshake runs this is the gate; CheckProfiles checks the set at its end.
         String mechanism = profile.substring(profile.indexOf("SASL/") + 5);
         if (!"PLAIN".equals(mechanism)) {
             throw new IOException(
@@ -113,10 +112,10 @@ public class SASLServerHandler implements ProfileServer {
     public ProfileMessage produceMessage() {
         int status = authenticated ? SASLMessage.COMPLETE : SASLMessage.CONTINUE;
         SASLMessage challenge = new SASLMessage("PLAIN", status, EMPTY);
-        if (logger.traceOn()) {
-            logger.trace("produceMessage", ">>>>> SASL server message <<<<<");
-            logger.trace("produceMessage", "Profile Name : " + challenge.getProfileName());
-            logger.trace("produceMessage", "Status : " + challenge.getStatus());
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> SASL server message <<<<<");
+            LOG.log(Level.TRACE, "Profile Name : " + challenge.getProfileName());
+            LOG.log(Level.TRACE, "Status : " + challenge.getStatus());
         }
         return challenge;
     }
@@ -127,10 +126,10 @@ public class SASLServerHandler implements ProfileServer {
                     "Unexpected profile message type: " + pm.getClass().getName());
         }
         SASLMessage response = (SASLMessage) pm;
-        if (logger.traceOn()) {
-            logger.trace("consumeMessage", ">>>>> SASL client message <<<<<");
-            logger.trace("consumeMessage", "Profile Name : " + response.getProfileName());
-            logger.trace("consumeMessage", "Status : " + response.getStatus());
+        if (LOG.isLoggable(Level.TRACE)) {
+            LOG.log(Level.TRACE, ">>>>> SASL client message <<<<<");
+            LOG.log(Level.TRACE, "Profile Name : " + response.getProfileName());
+            LOG.log(Level.TRACE, "Status : " + response.getStatus());
         }
         if (response.getStatus() != SASLMessage.CONTINUE) {
             throw new IOException("Unexpected SASL status [" + response.getStatus() + "]");
@@ -150,11 +149,18 @@ public class SASLServerHandler implements ProfileServer {
         String authcid = new String(blob, n1 + 1, n2 - (n1 + 1), StandardCharsets.UTF_8);
         String passwd = new String(blob, n2 + 1, blob.length - (n2 + 1), StandardCharsets.UTF_8);
 
+        // The client acts as the user it authenticates as. An authorization id that names someone else would add
+        // that user's name to the Subject, and with it that user's grants: refused, before any credential is checked.
+        if (!authzid.isEmpty() && !authzid.equals(authcid)) {
+            throw new SecurityException("SASL/PLAIN: acting as another user is not supported; the authorization id must"
+                    + " be empty or the authenticated user");
+        }
+
         // Delegate validation to the mandatory authenticator. A bad
-        // credential throws SecurityException, which propagates so AdminServer
+        // credential throws SecurityException, which propagates so ServerAdminImpl
         // sends a HandshakeErrorMessage and closes the connection.
         Subject authSubject = authenticator.authenticate(new String[] {authcid, passwd});
-        this.authorizationId = (authzid == null || authzid.isEmpty()) ? authcid : authzid;
+        this.authorizationId = authcid;
         if (authSubject != null) {
             if (subject == null) {
                 subject = new Subject();
@@ -228,5 +234,5 @@ public class SASLServerHandler implements ProfileServer {
     private JMXAuthenticator authenticator;
     private boolean authenticated = false;
     private String authorizationId;
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "SASLServerHandler");
+    private static final System.Logger LOG = System.getLogger(SASLServerHandler.class.getName());
 }

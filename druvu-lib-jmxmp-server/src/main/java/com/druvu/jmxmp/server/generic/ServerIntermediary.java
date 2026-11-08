@@ -50,17 +50,17 @@
 
 package com.druvu.jmxmp.server.generic;
 
+import com.druvu.jmxmp.internal.ServerSynchroMessageConnection;
+import com.druvu.jmxmp.internal.SynchroCallback;
+import com.druvu.jmxmp.server.internal.ClassLoaderWithRepository;
+import com.druvu.jmxmp.server.internal.OrderClassLoaders;
+import com.druvu.jmxmp.server.internal.ServerCommunicatorAdmin;
 import com.druvu.jmxmp.server.internal.ServerNotifForwarder;
-import com.druvu.jmxmp.shared.ServerCommunicatorAdmin;
-import com.druvu.jmxmp.shared.ServerSynchroMessageConnection;
-import com.druvu.jmxmp.shared.SynchroCallback;
-import com.druvu.jmxmp.util.ClassLoaderWithRepository;
-import com.druvu.jmxmp.util.ClassLogger;
 import com.druvu.jmxmp.util.EnvHelp;
-import com.druvu.jmxmp.util.OrderClassLoaders;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.NotSerializableException;
+import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -103,9 +103,7 @@ public class ServerIntermediary {
             ClassLoader defaultClassLoader,
             Map env) {
 
-        if (logger.traceOn()) {
-            logger.trace("constructor", "Create a ServerIntermediary object.");
-        }
+        LOG.log(Level.TRACE, "Create a ServerIntermediary object.");
 
         if (mbeanServer == null) {
             throw new NullPointerException("Null mbean server.");
@@ -155,9 +153,7 @@ public class ServerIntermediary {
 
     public Object handleRequest(MBeanServerRequestMessage req) throws Exception {
 
-        if (logger.traceOn()) {
-            logger.trace("handleRequest", "Handle a request: " + req);
-        }
+        LOG.log(Level.TRACE, () -> "Handle a request: " + req);
 
         if (req == null) {
             return null;
@@ -166,23 +162,17 @@ public class ServerIntermediary {
         final Object[] params = req.getParams();
         switch (req.getMethodId()) {
             case MBeanServerRequestMessage.CREATE_MBEAN:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a CREATE_MBEAN request.");
-                }
+                LOG.log(Level.TRACE, "Handle a CREATE_MBEAN request.");
 
                 return mbeanServer.createMBean((String) params[0], (ObjectName) params[1]);
 
             case MBeanServerRequestMessage.CREATE_MBEAN_LOADER:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a CREATE_MBEAN_LOADER request.");
-                }
+                LOG.log(Level.TRACE, "Handle a CREATE_MBEAN_LOADER request.");
 
                 return mbeanServer.createMBean((String) params[0], (ObjectName) params[1], (ObjectName) params[2]);
 
             case MBeanServerRequestMessage.CREATE_MBEAN_PARAMS:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a CREATE_MBEAN_PARAMS request.");
-                }
+                LOG.log(Level.TRACE, "Handle a CREATE_MBEAN_PARAMS request.");
 
                 return mbeanServer.createMBean(
                         (String) params[0],
@@ -191,9 +181,7 @@ public class ServerIntermediary {
                         (String[]) params[3]);
 
             case MBeanServerRequestMessage.CREATE_MBEAN_LOADER_PARAMS:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a CREATE_MBEAN_LOADER_PARAMS request.");
-                }
+                LOG.log(Level.TRACE, "Handle a CREATE_MBEAN_LOADER_PARAMS request.");
 
                 return mbeanServer.createMBean(
                         (String) params[0],
@@ -203,58 +191,42 @@ public class ServerIntermediary {
                         (String[]) params[4]);
 
             case MBeanServerRequestMessage.GET_ATTRIBUTE:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_ATTRIBUTE request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_ATTRIBUTE request.");
 
                 return mbeanServer.getAttribute((ObjectName) params[0], (String) params[1]);
 
             case MBeanServerRequestMessage.GET_ATTRIBUTES:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_ATTRIBUTES request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_ATTRIBUTES request.");
 
                 return mbeanServer.getAttributes((ObjectName) params[0], (String[]) params[1]);
 
             case MBeanServerRequestMessage.GET_DEFAULT_DOMAIN:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_DEFAULT_DOMAIN request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_DEFAULT_DOMAIN request.");
 
                 return mbeanServer.getDefaultDomain();
 
             case MBeanServerRequestMessage.GET_DOMAINS:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_DOMAINS request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_DOMAINS request.");
 
                 return mbeanServer.getDomains();
 
             case MBeanServerRequestMessage.GET_MBEAN_COUNT:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_MBEAN_COUNT request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_MBEAN_COUNT request.");
 
                 return mbeanServer.getMBeanCount();
 
             case MBeanServerRequestMessage.GET_MBEAN_INFO:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_MBEAN_INFO request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_MBEAN_INFO request.");
 
                 return mbeanServer.getMBeanInfo((ObjectName) params[0]);
 
             case MBeanServerRequestMessage.GET_OBJECT_INSTANCE:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a GET_OBJECT_INSTANCE request.");
-                }
+                LOG.log(Level.TRACE, "Handle a GET_OBJECT_INSTANCE request.");
 
                 return mbeanServer.getObjectInstance((ObjectName) params[0]);
 
             case MBeanServerRequestMessage.INVOKE:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a INVOKE request.");
-                }
+                LOG.log(Level.TRACE, "Handle a INVOKE request.");
 
                 return mbeanServer.invoke(
                         (ObjectName) params[0],
@@ -263,66 +235,52 @@ public class ServerIntermediary {
                         (String[]) params[3]);
 
             case MBeanServerRequestMessage.IS_INSTANCE_OF:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a IS_INSTANCE_OF request.");
-                }
+                LOG.log(Level.TRACE, "Handle a IS_INSTANCE_OF request.");
 
                 return mbeanServer.isInstanceOf((ObjectName) params[0], (String) params[1])
                         ? Boolean.TRUE
                         : Boolean.FALSE;
 
             case MBeanServerRequestMessage.IS_REGISTERED:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a IS_REGISTERED request.");
-                }
+                LOG.log(Level.TRACE, "Handle a IS_REGISTERED request.");
 
                 return mbeanServer.isRegistered((ObjectName) params[0]) ? Boolean.TRUE : Boolean.FALSE;
 
             case MBeanServerRequestMessage.QUERY_MBEANS:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a QUERY_MBEANS request.");
-                }
+                LOG.log(Level.TRACE, "Handle a QUERY_MBEANS request.");
 
                 return mbeanServer.queryMBeans(
                         (ObjectName) params[0], (QueryExp) serialization.unwrap(params[1], defaultClassLoader));
 
             case MBeanServerRequestMessage.QUERY_NAMES:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a QUERY_NAMES request.");
-                }
+                LOG.log(Level.TRACE, "Handle a QUERY_NAMES request.");
 
                 return mbeanServer.queryNames(
                         (ObjectName) params[0], (QueryExp) serialization.unwrap(params[1], defaultClassLoader));
 
             case MBeanServerRequestMessage.SET_ATTRIBUTE:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a SET_ATTRIBUTE request.");
-                }
+                LOG.log(Level.TRACE, "Handle a SET_ATTRIBUTE request.");
 
                 mbeanServer.setAttribute((ObjectName) params[0], (Attribute)
                         unwrapWithDefault(params[1], getClassLoaderFor((ObjectName) params[0])));
                 return null;
 
             case MBeanServerRequestMessage.SET_ATTRIBUTES:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a SET_ATTRIBUTES request.");
-                }
+                LOG.log(Level.TRACE, "Handle a SET_ATTRIBUTES request.");
 
                 return mbeanServer.setAttributes((ObjectName) params[0], (AttributeList)
                         unwrapWithDefault(params[1], getClassLoaderFor((ObjectName) params[0])));
 
             case MBeanServerRequestMessage.UNREGISTER_MBEAN:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a UNREGISTER_MBEAN request.");
-                }
+                LOG.log(Level.TRACE, "Handle a UNREGISTER_MBEAN request.");
 
                 mbeanServer.unregisterMBean((ObjectName) params[0]);
                 return null;
 
             case MBeanServerRequestMessage.ADD_NOTIFICATION_LISTENER_OBJECTNAME:
-                if (logger.traceOn()) {
+                if (LOG.isLoggable(Level.TRACE)) {
                     final String reqname = "ADD_NOTIFICATION_LISTENER_OBJECTNAME";
-                    logger.trace("handleRequest", "Handle a " + reqname + " request.");
+                    LOG.log(Level.TRACE, "Handle a " + reqname + " request.");
                 }
 
                 final ClassLoader cl1 = getClassLoaderFor((ObjectName) params[0]);
@@ -334,18 +292,18 @@ public class ServerIntermediary {
                 return null;
 
             case MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_OBJECTNAME:
-                if (logger.traceOn()) {
+                if (LOG.isLoggable(Level.TRACE)) {
                     final String reqname = "REMOVE_NOTIFICATION_LISTENER_OBJECTNAME";
-                    logger.trace("handleRequest", "Handle a " + reqname + " request.");
+                    LOG.log(Level.TRACE, "Handle a " + reqname + " request.");
                 }
 
                 mbeanServer.removeNotificationListener((ObjectName) params[0], (ObjectName) params[1]);
                 return null;
 
             case MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_OBJECTNAME_FILTER_HANDBACK:
-                if (logger.traceOn()) {
+                if (LOG.isLoggable(Level.TRACE)) {
                     final String reqname = "REMOVE_NOTIFICATION_LISTENER_OBJECTNAME_FILTER_HANDBACK";
-                    logger.trace("handleRequest", "Handle a " + reqname + " request.");
+                    LOG.log(Level.TRACE, "Handle a " + reqname + " request.");
                 }
 
                 final ClassLoader cl2 = getClassLoaderFor((ObjectName) params[0]);
@@ -357,9 +315,7 @@ public class ServerIntermediary {
                 return null;
 
             case MBeanServerRequestMessage.ADD_NOTIFICATION_LISTENERS:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a ADD_NOTIFICATION_LISTENERS request.");
-                }
+                LOG.log(Level.TRACE, "Handle a ADD_NOTIFICATION_LISTENERS request.");
 
                 if (isRI10) { // compatible to RI 10: bug 4948444
                     final ObjectName name = ((ObjectName[]) params[0])[0];
@@ -389,15 +345,15 @@ public class ServerIntermediary {
 
                 int i = 0;
                 Integer[] ids = new Integer[names.length];
-                final boolean debug = logger.debugOn();
+                final boolean debug = LOG.isLoggable(Level.TRACE);
 
                 try {
                     for (; i < names.length; i++) {
                         ClassLoader targetCl = getClassLoaderFor(names[i]);
 
                         if (debug) {
-                            logger.debug(
-                                    "addNotificationListener" + "(ObjectName,NotificationFilter)",
+                            LOG.log(
+                                    Level.TRACE,
                                     "connectionId=" + clientId
                                             + " unwrapping filter with target extended ClassLoader.");
                         }
@@ -406,8 +362,8 @@ public class ServerIntermediary {
                                 (NotificationFilter) unwrapWithDefault(wrappedFilters[i], targetCl);
 
                         if (debug) {
-                            logger.debug(
-                                    "addNotificationListener" + "(ObjectName,NotificationFilter)",
+                            LOG.log(
+                                    Level.TRACE,
                                     "connectionId=" + clientId + ", name=" + names[i] + ", filter=" + filterValue);
                         }
 
@@ -421,8 +377,8 @@ public class ServerIntermediary {
                         try {
                             getServerNotifFwd().removeNotificationListener(names[j], ids[j]);
                         } catch (Exception eee) {
-                            logger.warning(
-                                    "handleRequest-addNotificationListener",
+                            LOG.log(
+                                    Level.WARNING,
                                     "Failed to remove a listener from the MBean " + names[j] + ". " + eee.toString());
                         }
                     }
@@ -431,9 +387,9 @@ public class ServerIntermediary {
                 }
 
             case MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_FILTER_HANDBACK:
-                if (logger.traceOn()) {
+                if (LOG.isLoggable(Level.TRACE)) {
                     final String reqname = "REMOVE_NOTIFICATION_LISTENER_FILTER_HANDBACK";
-                    logger.trace("handleRequest", "Handle a " + reqname + " request.");
+                    LOG.log(Level.TRACE, "Handle a " + reqname + " request.");
                 }
 
                 getServerNotifFwd()
@@ -441,16 +397,14 @@ public class ServerIntermediary {
                 return null;
 
             case MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER:
-                if (logger.traceOn()) {
-                    logger.trace("handleRequest", "Handle a REMOVE_NOTIFICATION_LISTENER request.");
-                }
+                LOG.log(Level.TRACE, "Handle a REMOVE_NOTIFICATION_LISTENER request.");
 
                 getServerNotifFwd().removeNotificationListener((ObjectName) params[0], (Integer[]) params[1]);
                 return null;
 
             default:
                 // trace - log this as an info...
-                logger.info("handleRequest", "Unknown request id: " + req.getMethodId());
+                LOG.log(Level.INFO, "Unknown request id: " + req.getMethodId());
 
                 throw new IllegalArgumentException(
                         "The specified method is not " + "found [MethodId=" + req.getMethodId() + "]");
@@ -462,9 +416,7 @@ public class ServerIntermediary {
     }
 
     public void terminate(boolean local, String msg) {
-        if (logger.traceOn()) {
-            logger.trace("terminate", "Terminating....");
-        }
+        LOG.log(Level.TRACE, "Terminating....");
 
         synchronized (stateLock) {
             if (state == TERMINATED) {
@@ -477,9 +429,7 @@ public class ServerIntermediary {
         // inform the remote side of termination
         //
         if (!local) {
-            if (logger.traceOn()) {
-                logger.trace("terminate", "Send a CloseMessage to the client.");
-            }
+            LOG.log(Level.TRACE, "Send a CloseMessage to the client.");
 
             try {
                 synchronized (connection) {
@@ -487,15 +437,13 @@ public class ServerIntermediary {
                 }
 
             } catch (UnsupportedOperationException uoe) {
-                if (logger.traceOn()) {
-                    logger.trace("terminate", "The transport level does not support the method sendOneWay: " + uoe);
-                }
+                LOG.log(Level.TRACE, () -> "The transport level does not support the method sendOneWay: " + uoe);
             } catch (IOException ioe) {
                 // We haven't been able to inform the client that we're
                 // closing.
                 //
-                logger.warning("terminate", "Failed to inform the client: " + ioe);
-                logger.debug("terminate", ioe);
+                LOG.log(Level.WARNING, "Failed to inform the client: " + ioe);
+                LOG.log(Level.TRACE, ioe.toString(), ioe);
             }
         }
 
@@ -522,9 +470,7 @@ public class ServerIntermediary {
         //
         engine.clientClosing(this, clientId, "The method terminate is called.", null);
 
-        if (logger.traceOn()) {
-            logger.trace("terminate", "Terminated.");
-        }
+        LOG.log(Level.TRACE, "Terminated.");
     }
 
     ServerSynchroMessageConnection getTransport() {
@@ -544,9 +490,7 @@ public class ServerIntermediary {
                     throw new ConnectionClosedException("The connection is being terminated by the server");
                 }
 
-                if (logger.traceOn()) {
-                    logger.trace("RequestHandler-execute", "Execute the request: " + msg);
-                }
+                LOG.log(Level.TRACE, () -> "Execute the request: " + msg);
                 if (msg instanceof CloseMessage) {
                     return handleCloseMessage((CloseMessage) msg);
                 } else if (msg instanceof NotificationRequestMessage) {
@@ -557,7 +501,7 @@ public class ServerIntermediary {
                     // We can recover from this, so this should rather
                     // be a warning...
                     //
-                    logger.warning("RequestHandler-execute", "Got unknown message: " + msg);
+                    LOG.log(Level.WARNING, "Got unknown message: " + msg);
 
                     // send a notif
                     //
@@ -566,7 +510,7 @@ public class ServerIntermediary {
                     ServerIntermediary.this.terminate(false, "Got unknown message: " + msg);
                 }
             } catch (IOException cce) {
-                logger.trace("RequestHandler.execute", cce);
+                LOG.log(Level.TRACE, cce.toString(), cce);
                 // Do nothing here, the connection should be closed soon.
             } finally {
                 serverCommunicatorAdmin.rspOutgoing();
@@ -576,9 +520,7 @@ public class ServerIntermediary {
         }
 
         private Message handleCloseMessage(CloseMessage msg) {
-            if (logger.traceOn()) {
-                logger.trace("RequestHandler-execute", "Receive a CloseMessage.");
-            }
+            LOG.log(Level.TRACE, "Receive a CloseMessage.");
 
             ServerIntermediary.this.terminate(true, null);
 
@@ -586,9 +528,7 @@ public class ServerIntermediary {
         }
 
         private Message handleNotifReqMessage(NotificationRequestMessage nr) throws IOException {
-            if (logger.traceOn()) {
-                logger.trace("RequestHandler-execute", "Receive a NotificationRequestMessage.");
-            }
+            LOG.log(Level.TRACE, "Receive a NotificationRequestMessage.");
 
             long start = nr.getClientSequenceNumber();
             long timeout = nr.getTimeout();
@@ -617,9 +557,7 @@ public class ServerIntermediary {
         }
 
         private Message handleMBSReqMessage(MBeanServerRequestMessage req) throws IOException {
-            if (logger.traceOn()) {
-                logger.trace("RequestHandler-execute", "Receive a MBeanServerRequestMessage.");
-            }
+            LOG.log(Level.TRACE, "Receive a MBeanServerRequestMessage.");
             try {
                 // Phase 1.2 (PLAN-2.0.0.md §8): subject delegation is NOT
                 // supported by this library (user decision 2026-05-17). The wire
@@ -631,7 +569,7 @@ public class ServerIntermediary {
                 // via Subject.callAs (JDK 18+) — no AccessController /
                 // AccessControlContext / domain-combiner / delegation plumbing.
                 // Per-call authorization of the authenticated subject is the
-                // Phase 2 JmxmpAccessControl SPI's responsibility.
+                // Phase 2 JmxAccessControl SPI's responsibility.
                 if (req.getDelegationSubject() != null) {
                     throw new SecurityException("Subject delegation is not supported");
                 }
@@ -639,14 +577,10 @@ public class ServerIntermediary {
                 return new MBeanServerResponseMessage(req.getMessageId(), result, false);
             } catch (Exception e) {
                 e = extractException(e);
-                if (logger.traceOn()) {
-                    logger.trace("RequestHandler-execute", "Got an exception: " + e, e);
-                }
+                LOG.log(Level.TRACE, "Got an exception: " + e, e);
                 return new MBeanServerResponseMessage(req.getMessageId(), wrapException(e), true);
             } catch (Error r) {
-                if (logger.traceOn()) {
-                    logger.trace("RequestHandler-execute", "Got an error: " + r, r);
-                }
+                LOG.log(Level.TRACE, () -> "Got an error: " + r, r);
                 final JMXServerErrorException see = new JMXServerErrorException(r.toString(), r);
                 return new MBeanServerResponseMessage(req.getMessageId(), wrapException(see), true);
             }
@@ -682,16 +616,12 @@ public class ServerIntermediary {
                 /* This is the usual case when the client exits abruptly
                 or forgets to close the connection before exiting, so
                 log a more comprehensible warning.  (5003051)  */
-                logger.warning(
-                        "RequestHandler-connectionException",
-                        "JMX connector client exited without " + "closing connection");
+                LOG.log(Level.WARNING, "JMX connector client exited without " + "closing connection");
             } else {
-                logger.warning(
-                        "RequestHandler-connectionException",
-                        "JMX connector transport got exception " + "when reading input message: " + e);
+                LOG.log(Level.WARNING, "JMX connector transport got exception " + "when reading input message: " + e);
             }
 
-            logger.finer("RequestHandler-connectionException", e);
+            LOG.log(Level.TRACE, e.toString(), e);
 
             // send a notif
             //
@@ -782,8 +712,8 @@ public class ServerIntermediary {
                 serialization.wrap(trialnr);
                 tnList.add(tn);
             } catch (IOException e) {
-                logger.warning("purgeUnserializable", "cannot serialize notif: " + tn);
-                logger.fine("purgeUnserializable", e);
+                LOG.log(Level.WARNING, "cannot serialize notif: " + tn);
+                LOG.log(Level.DEBUG, e.toString(), e);
                 final Integer listenerID = tn.getListenerID();
                 final Notification badNotif = tn.getNotification();
                 final String notifType = JMXConnectionNotification.NOTIFS_LOST;
@@ -814,7 +744,7 @@ public class ServerIntermediary {
         return new NotificationResult(nr.getEarliestSequenceNumber(), nr.getNextSequenceNumber(), tns);
     }
 
-    private static final Long ONE_LONG = new Long(1);
+    private static final Long ONE_LONG = Long.valueOf(1);
 
     private class GenericServerCommunicatorAdmin extends ServerCommunicatorAdmin {
         public GenericServerCommunicatorAdmin(long timeout) {
@@ -894,7 +824,7 @@ public class ServerIntermediary {
 
     private GenericServerCommunicatorAdmin serverCommunicatorAdmin;
 
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.generic", "ServerIntermediary");
+    private static final System.Logger LOG = System.getLogger(ServerIntermediary.class.getName());
 
     private static final int RUNNING = 0;
     private static final int FAILED = 1;

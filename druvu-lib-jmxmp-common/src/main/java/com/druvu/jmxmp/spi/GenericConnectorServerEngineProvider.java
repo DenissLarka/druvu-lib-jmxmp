@@ -8,7 +8,7 @@
 
 package com.druvu.jmxmp.spi;
 
-import com.druvu.jmxmp.shared.SynchroMessageConnectionServer;
+import com.druvu.jmxmp.internal.SynchroMessageConnectionServer;
 import java.util.Map;
 import javax.management.MBeanServer;
 import javax.management.remote.JMXConnectorServer;

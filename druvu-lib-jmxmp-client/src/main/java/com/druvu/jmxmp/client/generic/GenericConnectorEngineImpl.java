@@ -11,15 +11,15 @@
 
 package com.druvu.jmxmp.client.generic;
 
-import com.druvu.jmxmp.shared.ClientCommunicatorAdmin;
-import com.druvu.jmxmp.shared.ClientSynchroMessageConnection;
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.ObjectWrappingImpl;
-import com.druvu.jmxmp.shared.SynchroCallback;
+import com.druvu.jmxmp.client.internal.ClientCommunicatorAdmin;
+import com.druvu.jmxmp.client.internal.ClientConfig;
+import com.druvu.jmxmp.client.internal.ClientSynchroMessageConnection;
+import com.druvu.jmxmp.internal.ObjectWrappingImpl;
+import com.druvu.jmxmp.internal.SynchroCallback;
 import com.druvu.jmxmp.spi.EngineCallback;
 import com.druvu.jmxmp.spi.GenericConnectorEngine;
-import com.druvu.jmxmp.util.ClassLogger;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.util.Map;
 import java.util.WeakHashMap;
 import javax.management.Attribute;
@@ -79,8 +79,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
     private int state = CREATED;
     private long seq = 0;
 
-    private static final ClassLogger logger =
-            new ClassLogger("com.druvu.jmxmp.client.generic", "GenericConnectorEngineImpl");
+    private static final System.Logger LOG = System.getLogger(GenericConnectorEngineImpl.class.getName());
 
     public GenericConnectorEngineImpl(
             JMXConnector facade, EngineCallback callback, JMXServiceURL address, Map env, MessageConnection mc) {
@@ -90,7 +89,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
 
     @Override
     public void connect(Map<String, ?> connectEnv) throws IOException {
-        final boolean tracing = logger.traceOn();
+        final boolean tracing = LOG.isLoggable(Level.TRACE);
 
         synchronized (lock) {
             switch (state) {
@@ -113,11 +112,11 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
                 // pre-building a SocketConnection (keeps `common` client-free).
                 Object u = env.get("com.druvu.jmxmp.x.url");
                 if (u instanceof javax.management.remote.JMXServiceURL url) {
-                    conn = new com.druvu.jmxmp.shared.SocketConnection(url.getHost(), url.getPort());
+                    conn = new com.druvu.jmxmp.internal.SocketConnection(url.getHost(), url.getPort());
                 }
             }
             if (conn == null) {
-                connection = DefaultConfig.getClientSynchroMessageConnection(env);
+                connection = ClientConfig.getClientSynchroMessageConnection(env);
                 if (connection == null) {
                     throw new IllegalArgumentException("No MessageConnection");
                 }
@@ -138,7 +137,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
             this.env = env;
             state = CONNECTED;
             if (tracing) {
-                logger.trace("connect", connectionId + " Connected.");
+                LOG.log(Level.TRACE, connectionId + " Connected.");
             }
         }
 
@@ -176,8 +175,8 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
     }
 
     void close(boolean local, String msg) throws IOException {
-        final boolean tracing = logger.traceOn();
-        final boolean debug = logger.debugOn();
+        final boolean tracing = LOG.isLoggable(Level.TRACE);
+        final boolean debug = LOG.isLoggable(Level.TRACE);
         Exception closeException;
         boolean createdState;
 
@@ -201,7 +200,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
                     } catch (Exception e1) {
                         closeException = e1;
                         if (debug) {
-                            logger.debug("close", e1);
+                            LOG.log(Level.TRACE, e1.toString(), e1);
                         }
                     }
                 }
@@ -210,7 +209,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
                 } catch (Exception e1) {
                     closeException = e1;
                     if (debug) {
-                        logger.debug("close", e1);
+                        LOG.log(Level.TRACE, e1.toString(), e1);
                     }
                 }
             }
@@ -242,7 +241,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
             throw (IOException) x.initCause(closeException);
         }
         if (tracing) {
-            logger.trace("close", "closed.");
+            LOG.log(Level.TRACE, "closed.");
         }
     }
 
@@ -442,9 +441,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
 
         public Message execute(Message msg) {
             if (msg instanceof CloseMessage) {
-                if (logger.traceOn()) {
-                    logger.trace("RequestHandler-execute", "got Message REMOTE_TERMINATION");
-                }
+                LOG.log(Level.TRACE, "got Message REMOTE_TERMINATION");
                 try {
                     ClientCommunicatorAdmin admin = clientMBeanServer.getCommunicatorAdmin();
                     admin.gotIOException(new IOException(""));
@@ -459,12 +456,12 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
                 }
             } else {
                 final String errstr = ((msg == null) ? "null" : msg.getClass().getName()) + ": Bad message type.";
-                logger.warning("RequestHandler-execute", errstr);
+                LOG.log(Level.WARNING, errstr);
                 try {
-                    logger.warning("RequestHandler-execute", "Closing connector");
+                    LOG.log(Level.WARNING, "Closing connector");
                     GenericConnectorEngineImpl.this.close(false, null);
                 } catch (IOException ie) {
-                    logger.info("RequestHandler-execute", ie);
+                    LOG.log(Level.INFO, ie.toString(), ie);
                 }
             }
             return null;
@@ -476,7 +473,7 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
                     return;
                 }
             }
-            logger.warning("RequestHandler-connectionException", e);
+            LOG.log(Level.WARNING, e.toString(), e);
             if (e instanceof IOException) {
                 try {
                     ClientCommunicatorAdmin admin = clientMBeanServer.getCommunicatorAdmin();
@@ -488,11 +485,11 @@ public final class GenericConnectorEngineImpl implements GenericConnectorEngine 
             }
             synchronized (lock) {
                 if (state == CONNECTED) {
-                    logger.warning("RequestHandler-connectionException", "Got connection exception: " + e.toString());
+                    LOG.log(Level.WARNING, "Got connection exception: " + e.toString());
                     try {
                         GenericConnectorEngineImpl.this.close(true, null);
                     } catch (IOException ie) {
-                        logger.info("RequestHandler-execute", ie);
+                        LOG.log(Level.INFO, ie.toString(), ie);
                     }
                 }
             }

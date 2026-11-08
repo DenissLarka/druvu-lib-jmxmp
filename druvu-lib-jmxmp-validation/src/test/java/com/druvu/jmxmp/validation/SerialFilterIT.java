@@ -11,7 +11,7 @@ package com.druvu.jmxmp.validation;
 
 import static org.testng.Assert.assertEquals;
 
-import com.druvu.jmxmp.shared.JmxmpSerialFilter;
+import com.druvu.jmxmp.JmxmpSerialFilter;
 import java.io.ObjectInputFilter;
 import java.io.ObjectInputFilter.Status;
 import javax.management.ObjectName;

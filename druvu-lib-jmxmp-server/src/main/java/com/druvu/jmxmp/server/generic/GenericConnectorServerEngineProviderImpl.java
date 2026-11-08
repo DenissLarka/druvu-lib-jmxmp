@@ -8,7 +8,7 @@
 
 package com.druvu.jmxmp.server.generic;
 
-import com.druvu.jmxmp.shared.SynchroMessageConnectionServer;
+import com.druvu.jmxmp.internal.SynchroMessageConnectionServer;
 import com.druvu.jmxmp.spi.GenericConnectorServerEngine;
 import com.druvu.jmxmp.spi.GenericConnectorServerEngineProvider;
 import com.druvu.jmxmp.spi.ServerConnectionCallback;

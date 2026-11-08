@@ -64,6 +64,7 @@ public class ServerProvider implements JMXConnectorServerProvider {
 
     public JMXConnectorServer newJMXConnectorServer(JMXServiceURL serviceURL, Map environment, MBeanServer mbeanServer)
             throws IOException {
+
         if (!serviceURL.getProtocol().equals("jmxmp")) {
             throw new MalformedURLException("Protocol not jmxmp: " + serviceURL.getProtocol());
         }

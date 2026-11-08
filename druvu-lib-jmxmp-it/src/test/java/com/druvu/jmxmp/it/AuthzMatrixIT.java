@@ -4,9 +4,9 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.expectThrows;
 
-import com.druvu.jmxmp.shared.JmxAccessRequest;
-import com.druvu.jmxmp.shared.JmxAction;
-import com.druvu.jmxmp.shared.JmxmpAccessControl;
+import com.druvu.jmxmp.access.JmxAccessControl;
+import com.druvu.jmxmp.access.JmxAccessRequest;
+import com.druvu.jmxmp.access.JmxAction;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -25,7 +25,7 @@ import javax.security.auth.Subject;
 import org.testng.annotations.Test;
 
 /**
- * Authorization matrix (PLAN-2.0.0 §8 item 3.1). The bulk runs the built-in {@link JmxmpAccessControl#policy()} RBAC
+ * Authorization matrix (PLAN-2.0.0 §8 item 3.1). The bulk runs the built-in {@link JmxAccessControl#policy()} RBAC
  * directly (deterministic, no socket); two integration cases use the reliable classpath TLS+SASL harness: the
  * non-typed-{@code ENV_KEY} fail-closed-at-start guarantee and the delegation-rejection guarantee.
  */
@@ -44,8 +44,8 @@ public class AuthzMatrixIT {
     }
 
     /** ro: targeted + untargeted READ. ops: inherits ro + Cache invoke/write. alice→ops, svc-ro→ro. */
-    private static JmxmpAccessControl matrixPolicy() {
-        return JmxmpAccessControl.policy()
+    private static JmxAccessControl matrixPolicy() {
+        return JmxAccessControl.policy()
                 .role("ro")
                 .allow(JmxAction.READ, "*")
                 .allow(JmxAction.READ)
@@ -127,7 +127,7 @@ public class AuthzMatrixIT {
 
     @Test
     public void allowAllPermitsAllVerbs() throws Exception {
-        JmxmpAccessControl ac = JmxmpAccessControl.allowAll();
+        JmxAccessControl ac = JmxAccessControl.allowAll();
         ac.checkAccess(subject("anyone"), new JmxAccessRequest(JmxAction.READ, on("x:y=z")));
         ac.checkAccess(subject("anyone"), new JmxAccessRequest(JmxAction.WRITE, on("x:y=z")));
         ac.checkAccess(subject("anyone"), new JmxAccessRequest(JmxAction.INVOKE, on("x:y=z")));
@@ -140,14 +140,14 @@ public class AuthzMatrixIT {
     public void inheritUnknownRoleRejectedAtBuild() {
         expectThrows(
                 IllegalStateException.class,
-                () -> JmxmpAccessControl.policy().role("a").inherit("ghost").build());
+                () -> JmxAccessControl.policy().role("a").inherit("ghost").build());
     }
 
     @Test
     public void inheritanceCycleRejectedAtBuild() {
         expectThrows(
                 IllegalStateException.class,
-                () -> JmxmpAccessControl.policy()
+                () -> JmxAccessControl.policy()
                         .role("a")
                         .inherit("b")
                         .role("b")
@@ -159,14 +159,14 @@ public class AuthzMatrixIT {
     public void grantedRolesBeforePrincipalRejected() {
         expectThrows(
                 IllegalStateException.class,
-                () -> JmxmpAccessControl.policy().role("r").grantedRoles("r"));
+                () -> JmxAccessControl.policy().role("r").grantedRoles("r"));
     }
 
     @Test
     public void malformedPatternRejectedEagerly() {
         expectThrows(
                 IllegalArgumentException.class,
-                () -> JmxmpAccessControl.policy().role("r").allow(JmxAction.READ, "not a valid object name"));
+                () -> JmxAccessControl.policy().role("r").allow(JmxAction.READ, "not a valid object name"));
     }
 
     // ---- integration: non-typed ENV_KEY fails closed at server start --------
@@ -179,12 +179,12 @@ public class AuthzMatrixIT {
         env.put("jmx.remote.profiles", "TLS SASL/PLAIN");
         env.put("jmx.remote.tls.socket.factory", TlsTestSupport.socketFactory());
         env.put(JMXConnectorServer.AUTHENTICATOR, auth);
-        env.put(JmxmpAccessControl.ENV_KEY, "not-a-JmxmpAccessControl"); // a String, e.g. from -D/props
+        env.put(JmxAccessControl.ENV_KEY, "not-a-JmxAccessControl"); // a String, e.g. from -D/props
 
         JMXServiceURL url = new JMXServiceURL("jmxmp", "localhost", 0);
         JMXConnectorServer server = JMXConnectorServerFactory.newJMXConnectorServer(url, env, mbs);
         SecurityException ex = expectThrows(SecurityException.class, server::start);
-        assertTrue(ex.getMessage().contains(JmxmpAccessControl.ENV_KEY), ex.getMessage());
+        assertTrue(ex.getMessage().contains(JmxAccessControl.ENV_KEY), ex.getMessage());
         if (server.isActive()) {
             server.stop();
         }
@@ -220,7 +220,7 @@ public class AuthzMatrixIT {
         senv.put("jmx.remote.tls.socket.factory", TlsTestSupport.socketFactory());
         senv.put(JMXConnectorServer.AUTHENTICATOR, auth);
         // Authorization explicitly OFF — yet lifecycle must still be denied.
-        senv.put(JmxmpAccessControl.ENV_KEY, JmxmpAccessControl.allowAll());
+        senv.put(JmxAccessControl.ENV_KEY, JmxAccessControl.allowAll());
 
         JMXServiceURL url = new JMXServiceURL("jmxmp", "localhost", 0);
         JMXConnectorServer server = JMXConnectorServerFactory.newJMXConnectorServer(url, senv, mbs);

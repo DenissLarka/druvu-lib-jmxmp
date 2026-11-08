@@ -16,15 +16,15 @@ implementation. The public OpenDMK API under `javax.management.remote.*` is
 **FQN-frozen** — existing code that talks to `JMXMPConnector` /
 `JMXMPConnectorServer` via `JMXConnectorFactory` recompiles unchanged.
 
-> **On Maven Central** as of `2.0.0` (`com.druvu:druvu-lib-jmxmp-*`). The
+> **On Maven Central** as of `3.0.0` (`com.druvu:druvu-lib-jmxmp-*`; 2.x since `2.0.0`). The
 > wire/security model below is a deliberate, documented break from upstream
 > OpenDMK — read [Security](#security) before adopting.
 
 ## Why this fork
 
-- **JPMS-modular on Java 21.** Three real modules with a strict
-  `client → common`, `server → common` dependency direction — no
-  split packages, no automatic-module guesswork.
+- **JPMS-modular on Java 21.** Four modules with a strict dependency
+  direction — `client → common`, `server → common + access`, and `access` on
+  `java.management` alone — no split packages, no automatic-module guesswork.
 - **Security is mandatory on the server, secure-by-default on the client.**
   The server is exactly `TLS SASL/PLAIN` with a required `JMXAuthenticator` —
   no plaintext, no other SASL mechanisms, no escape hatch. The client enforces
@@ -59,8 +59,8 @@ Beyond that one fix, the model is built for the post-Security-Manager platform:
   deprecation-for-removal warnings. Identity propagates through the JDK's own
   sanctioned `Subject.current()` / `Subject.callAs`.
 - **A real authorization model, in code.** A typed, **default-deny**
-  `JmxmpAccessControl` SPI with a built-in role / `ObjectName`-pattern policy
-  (`JmxmpAccessControl.policy()`) provides **per-verb, per-target** authorization
+  `JmxAccessControl` SPI with a built-in role / `ObjectName`-pattern policy
+  (`JmxAccessControl.policy()`) provides **per-verb, per-target** authorization
   in place of the removed `MBeanPermission` system and OpenDMK's 2007
   `username=readonly|readwrite` properties file. Grants are a coarse verb set —
   `READ` / `WRITE` / `INVOKE` / `NOTIFY` — over an `ObjectName` target; unlike
@@ -70,7 +70,7 @@ Beyond that one fix, the model is built for the post-Security-Manager platform:
   instantiate) and the deprecated `deserialize` forms are **permanently
   denied**: there is no verb to grant them and `allowAll()` does not relax them,
   so a client can only ever act on MBeans that already exist. The open-server
-  opt-out (`JmxmpAccessControl.allowAll()`) is a typed, code-only sentinel — it
+  opt-out (`JmxAccessControl.allowAll()`) is a typed, code-only sentinel — it
   can never be flipped by a system property, a config file, or the command line.
 - **Honest, bounded compatibility.** The wire/transport API stays byte-for-byte
   OpenDMK (verified every build). The security-idiom change is the JDK forcing
@@ -86,27 +86,40 @@ graph TD
     client["druvu-lib-jmxmp-client<br/>com.druvu.jmxmp.client"]
     server["druvu-lib-jmxmp-server<br/>com.druvu.jmxmp.server"]
     common["druvu-lib-jmxmp-common<br/>com.druvu.jmxmp.common<br/>(public javax.management.remote.* API + SPI)"]
+    access["druvu-lib-jmxmp-access<br/>com.druvu.jmxmp.access<br/>(authorization, transport-neutral)"]
     client --> common
     server --> common
+    server --> access
     style common fill:#e8f0fe,stroke:#5b8def
+    style access fill:#fdf3e1,stroke:#d9a441
     style client fill:#eaf5ec,stroke:#5f9c6a
     style server fill:#eaf5ec,stroke:#5f9c6a
 ```
 
 | Module | Artifact | Use when |
 |---|---|---|
-| common | `druvu-lib-jmxmp-common` | always (transitively pulled by the others) |
+| common | `druvu-lib-jmxmp-common` | always for JMXMP (transitively pulled by `client` and `server`) |
 | client | `druvu-lib-jmxmp-client` | you connect *to* a JMXMP server |
 | server | `druvu-lib-jmxmp-server` | you expose an MBean server over JMXMP |
+| access | `druvu-lib-jmxmp-access` | you write an authorization policy (pulled by `server`); it requires `java.management` only, so a connector over another transport can reuse it |
 
 `common` carries the public API + SPI; the client and server engines are
 discovered at runtime via `ServiceLoader`. `common` has **zero** edge —
-compile or reflective — to client/server, so a client-only or server-only
-deployment resolves with only its own module + `common` on the path.
+compile or reflective — to client/server, so a client-only deployment resolves
+with its own module + `common` on the path, and a server-only one with
+`server` + `common` + `access`.
+
+What an application imports: `com.druvu.jmxmp` (`ClientProfilePolicy`,
+`SelectProfiles`, `JmxmpSerialFilter`), `com.druvu.jmxmp.server`
+(`JmxmpServerSecurity`, `AllowAnyAuthenticator`) and `com.druvu.jmxmp.access`
+(`JmxAccessControl`, `JmxAction`, `PolicyBuilder`, `NamedPrincipal`).
+`com.druvu.jmxmp.internal` and `com.druvu.jmxmp.util` are the protocol's own,
+exported to the client and server modules only; `com.druvu.jmxmp.spi` is the
+engine seam.
 
 ## Adding the dependency
 
-On **Maven Central** — `groupId` `com.druvu`, current version `2.0.0`. Pick the
+On **Maven Central** — `groupId` `com.druvu`, current version `3.0.0`. Pick the
 module(s) for your scenario:
 
 **Client only**
@@ -115,7 +128,7 @@ module(s) for your scenario:
 <dependency>
     <groupId>com.druvu</groupId>
     <artifactId>druvu-lib-jmxmp-client</artifactId>
-    <version>2.0.0</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
@@ -125,12 +138,13 @@ module(s) for your scenario:
 <dependency>
     <groupId>com.druvu</groupId>
     <artifactId>druvu-lib-jmxmp-server</artifactId>
-    <version>2.0.0</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
 **Both sides** (in-process loopback, tooling that does client *and* server) —
-declare both `-client` and `-server`; each transitively brings `-common`.
+declare both `-client` and `-server`; each transitively brings `-common`, and
+`-server` brings `-access`.
 
 > To build from source instead:
 > `git clone https://github.com/DenissLarka/druvu-lib-jmxmp && cd druvu-lib-jmxmp && mvn -DskipTests install` (JDK 21).
@@ -140,7 +154,8 @@ declare both `-client` and `-server`; each transitively brings `-common`.
 By default this build accepts **exactly one** profile set:
 `jmx.remote.profiles = "TLS SASL/PLAIN"`. Anything else fails fast:
 
-- no `jmx.remote.profiles` → `IllegalArgumentException` at construction
+- no `jmx.remote.profiles` on a client → `IllegalArgumentException` at
+  construction (a server without it gets `TLS SASL/PLAIN`)
 - plaintext, TLS-only, SASL-only, or any non-PLAIN SASL mechanism
   (CRAM-MD5, DIGEST-MD5, GSSAPI, EXTERNAL, OAUTHBEARER) → `SecurityException`
 - a server without a `JMXAuthenticator` → rejected at construction
@@ -223,7 +238,7 @@ frozen `javax.management.remote.*` surface is untouched.
 **Hardened, authenticated server (no authorization → authenticated-but-unrestricted):**
 
 ```java
-import com.druvu.jmxmp.shared.JmxmpServerSecurity;
+import com.druvu.jmxmp.server.JmxmpServerSecurity;
 
 Map<String, Object> env = JmxmpServerSecurity.builder()
         .tls(sslContext)                 // recommended real cert (omit ⇒ ephemeral self-signed)
@@ -239,10 +254,10 @@ server.start();
 — authentication says *who*, this says *what they may do*):
 
 ```java
-import com.druvu.jmxmp.shared.JmxmpAccessControl;
-import static com.druvu.jmxmp.shared.JmxAction.*;
+import com.druvu.jmxmp.access.JmxAccessControl;
+import static com.druvu.jmxmp.access.JmxAction.*;
 
-JmxmpAccessControl policy = JmxmpAccessControl.policy()
+JmxAccessControl policy = JmxAccessControl.policy()
         .role("ro")
             .allow(READ, "*")            // attributes + all introspection/discovery
             .allow(READ)                 // untargeted reads (queryNames / getDomains)
@@ -266,12 +281,12 @@ explicitly granted is refused with a `SecurityException` before the call ever
 reaches the MBean. `svc-dashboard` can read and query; `alice` can also invoke
 and set on the cache MBeans; neither can do anything else.
 
-**Deliberately open (authentication only)** — the *only* route to an
-unrestricted server is an explicit, code-only sentinel; there is no config
-flag for it:
+**Deliberately open (authentication only)** — without an authorization
+policy every authenticated user may run every normal operation; the explicit,
+code-only sentinel says so in code, and there is no config flag for it:
 
 ```java
-.authorization(JmxmpAccessControl.allowAll())   // typed, code-only — never a property
+.authorization(JmxAccessControl.allowAll())   // typed, code-only — never a property
 ```
 
 `allowAll()` opens every *normal* operation (read / write / invoke / notify) to
@@ -288,7 +303,7 @@ authorization key) — that fails at `build()`:
 ```
 
 Guarantees, by construction: `build()` throws `IllegalStateException` if TLS
-or the authenticator is absent; a non-`JmxmpAccessControl` value can never
+or the authenticator is absent; a non-`JmxAccessControl` value can never
 reach the authorization slot (so the open-server opt-out cannot be flipped by
 ops tooling); and the returned map is a fresh, caller-owned `HashMap`.
 
@@ -387,7 +402,7 @@ relaxes it — a string under that key (e.g. from a `-D` property) is rejected,
 so the opt-out can never be flipped by ops tooling or the command line.
 
 ```java
-import com.druvu.jmxmp.shared.ClientProfilePolicy;
+import com.druvu.jmxmp.ClientProfilePolicy;
 
 // 1. Default — supply nothing. Client requires exactly TLS SASL/PLAIN.
 Map<String, Object> env = new HashMap<>();
@@ -407,11 +422,10 @@ env.put(ClientProfilePolicy.ENV_KEY, ClientProfilePolicy.require("TLS"));
 env.put("jmx.remote.profiles", "TLS");
 env.put("jmx.remote.tls.socket.factory", sslContext.getSocketFactory());
 
-// 4. A custom set, e.g. TLS + an alternate SASL mechanism the peer requires.
-env.put(ClientProfilePolicy.ENV_KEY,
-        ClientProfilePolicy.require("TLS", "SASL/DIGEST-MD5"));
-env.put("jmx.remote.profiles", "TLS SASL/DIGEST-MD5");
 ```
+
+This build speaks SASL/PLAIN only: a set naming another SASL mechanism passes
+the policy and then fails at that profile.
 
 `unrestricted()` accepts any profile set including none; `require(...)` accepts
 **exactly** the enumerated set (order-independent, case-insensitive) and pairs
@@ -498,11 +512,11 @@ JVM filter can only tighten it, never loosen it. See
   rather than papered over — see *Modern Java security* above.
 - **Authorization replaced, no shim.** OpenDMK's `MBeanServerFileAccessController`
   and the `jmx.remote.x.access.file` properties mechanism are **removed**.
-  Authorization is now the typed, code-only `JmxmpAccessControl` SPI
-  (default-deny) with a built-in `JmxmpAccessControl.policy()` RBAC, supplied
-  under `JmxmpAccessControl.ENV_KEY` (or via the `JmxmpServerSecurity` builder).
+  Authorization is now the typed, code-only `JmxAccessControl` SPI
+  (default-deny) with a built-in `JmxAccessControl.policy()` RBAC, supplied
+  under `JmxAccessControl.ENV_KEY` (or via the `JmxmpServerSecurity` builder).
   No control configured ⇒ authenticated-but-unrestricted on existing MBeans
-  (authentication is still mandatory); a non-`JmxmpAccessControl` value under
+  (authentication is still mandatory); a non-`JmxAccessControl` value under
   the key ⇒ fail-closed at server start. Grants are a coarse verb set
   (`READ`/`WRITE`/`INVOKE`/`NOTIFY`) over an `ObjectName` target; remote MBean
   lifecycle (create/register/unregister/instantiate) and the deprecated
@@ -524,6 +538,43 @@ JVM filter can only tighten it, never loosen it. See
 - Pre-Java-1.4 JRE / reflection compatibility shims removed. Baseline is
   **Java 21**.
 
+## Breaking changes in 3.0.0 (vs 2.0.0)
+
+Packages and names: the public API is now the documented classes alone, and
+the authorization lives in a module of its own. Behaviour changes:
+
+- **TLS runs first, on both sides.** A profile list with TLS after another
+  profile (`SASL/PLAIN TLS`) is refused, under every client policy,
+  `unrestricted()` included: it would send the SASL password before TLS
+  starts. A server refuses such a list at construction, and refuses any
+  profile a client starts before TLS is active.
+- **A client acts as the user it authenticated as.** A SASL/PLAIN
+  authorization id that names another user is refused at the handshake.
+- **A profile runs once per connection.** A message for a profile that
+  already ran ends the handshake with an error.
+- A client profile policy checks the profile set itself
+  (`ClientProfilePolicy.check` / `checkSpec`), so its error messages name the
+  policy and how to change it.
+
+New, not breaking: `NamedPrincipal` and `AccessControlledMBeanServer` (the
+guard, before in the unexported `com.druvu.jmxmp.server.generic`) as public
+API in `com.druvu.jmxmp.access`.
+
+| 2.0.0 | 3.0.0 |
+|---|---|
+| `com.druvu.jmxmp.shared.ClientProfilePolicy`, `.SelectProfiles`, `.JmxmpSerialFilter` | `com.druvu.jmxmp.ClientProfilePolicy`, `.SelectProfiles`, `.JmxmpSerialFilter` |
+| `com.druvu.jmxmp.shared.JmxmpServerSecurity` | `com.druvu.jmxmp.server.JmxmpServerSecurity` |
+| `com.druvu.jmxmp.server.security.AllowAnyAuthenticator` | `com.druvu.jmxmp.server.AllowAnyAuthenticator` |
+| `com.druvu.jmxmp.shared.JmxmpAccessControl`, `.JmxAction`, `.JmxAccessRequest`, `.PolicyBuilder` | `com.druvu.jmxmp.access.JmxAccessControl` (renamed), `.JmxAction`, `.JmxAccessRequest`, `.PolicyBuilder` — the new `druvu-lib-jmxmp-access` module, pulled by `-server` |
+| the rest of `com.druvu.jmxmp.shared` (the protocol internals) | `com.druvu.jmxmp.internal`, exported to the client and server modules only, as `com.druvu.jmxmp.util` now is |
+| `com.druvu.jmxmp.shared.JMXPasswordAuthenticator` | removed (OpenDMK's password-file authenticator, unused by the library; supply a `JMXAuthenticator` of your own) |
+| logging through `java.util.logging`, OpenDMK's loggers by area (`javax.management.remote.misc`, `.generic`, `.timeout`, a few `com.druvu.jmxmp.*`) | `System.Logger`, one logger per class under `com.druvu.jmxmp`; the wire-level chatter at `TRACE`; `java.logging` is no longer required |
+| profile providers looked up by class name (`jmx.remote.profile.provider.pkgs`, `jmx.remote.profile.provider.class.loader`) | removed: the connector speaks TLS and SASL/PLAIN and picks their handlers itself; the two keys are ignored |
+| OpenDMK's own thread pools, threads named `Job_Executor<n>` | `java.util.concurrent` executors, daemon threads named `jmxmp-<purpose>-<n>` (`server-connection`, `server-accept`, `client-connection`, `client-notifications`); `jmx.remote.x.server.max.threads` still bounds the requests a server connection runs at once (default 10; its reader has a thread of its own), `jmx.remote.x.server.min.threads` is ignored |
+
+The env keys (`JmxAccessControl.ENV_KEY`, `ClientProfilePolicy.ENV_KEY`) and
+the system properties keep their string values.
+
 ## Build
 
 ```bash
@@ -531,8 +582,8 @@ mvn clean verify        # JDK 21; runs the classpath + module-path test matrix
 ```
 
 The build enforces formatting (`spotless`), the public-API snapshot diff, and
-a JPMS module-path validation matrix (client-only / server-only / both-sides
-deployment shapes).
+a JPMS module-path validation matrix (client-only / server-only / access-only /
+both-sides deployment shapes).
 
 ## License
 

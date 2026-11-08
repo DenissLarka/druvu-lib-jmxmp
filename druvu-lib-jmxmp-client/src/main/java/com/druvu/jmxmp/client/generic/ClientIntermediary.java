@@ -50,16 +50,16 @@
 
 package com.druvu.jmxmp.client.generic;
 
+import com.druvu.jmxmp.client.internal.ClientCommunicatorAdmin;
 import com.druvu.jmxmp.client.internal.ClientListenerInfo;
 import com.druvu.jmxmp.client.internal.ClientNotifForwarder;
-import com.druvu.jmxmp.shared.ClientCommunicatorAdmin;
-import com.druvu.jmxmp.shared.ClientSynchroMessageConnection;
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.ObjectWrappingImpl;
-import com.druvu.jmxmp.util.ClassLogger;
+import com.druvu.jmxmp.client.internal.ClientSynchroMessageConnection;
+import com.druvu.jmxmp.internal.DefaultConfig;
+import com.druvu.jmxmp.internal.ObjectWrappingImpl;
 import com.druvu.jmxmp.util.EnvHelp;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.lang.System.Logger.Level;
 import java.util.Map;
 import java.util.Set;
 import javax.management.Attribute;
@@ -99,7 +99,7 @@ public class ClientIntermediary {
             ObjectWrapping wrap,
             GenericConnectorEngineImpl engine,
             Map env) {
-        logger.trace("constructor", "Create a ClientIntermediary object.");
+        LOG.log(Level.TRACE, "Create a ClientIntermediary object.");
 
         if (connection == null) {
             throw new NullPointerException("Null connection.");
@@ -107,7 +107,7 @@ public class ClientIntermediary {
 
         this.connection = connection;
         if (wrap == null) {
-            logger.trace("constructor", "Use a default ObjectWrapping implementation.");
+            LOG.log(Level.TRACE, "Use a default ObjectWrapping implementation.");
 
             this.serialization = new ObjectWrappingImpl();
         } else {
@@ -131,7 +131,7 @@ public class ClientIntermediary {
             throws ReflectionException, InstanceAlreadyExistsException, MBeanException, NotCompliantMBeanException,
                     IOException {
 
-        logger.trace("createMBean", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (ObjectInstance) mBeanServerRequest(
@@ -156,7 +156,7 @@ public class ClientIntermediary {
             throws ReflectionException, InstanceAlreadyExistsException, MBeanException, NotCompliantMBeanException,
                     IOException {
 
-        logger.trace("createMBean", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (ObjectInstance) mBeanServerRequest(
@@ -183,7 +183,7 @@ public class ClientIntermediary {
             throws ReflectionException, InstanceAlreadyExistsException, MBeanException, NotCompliantMBeanException,
                     InstanceNotFoundException, IOException {
 
-        logger.trace("createMBean", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (ObjectInstance) mBeanServerRequest(
@@ -217,7 +217,7 @@ public class ClientIntermediary {
             throws ReflectionException, InstanceAlreadyExistsException, MBeanException, NotCompliantMBeanException,
                     InstanceNotFoundException, IOException {
 
-        logger.trace("createMBean", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             int code = MBeanServerRequestMessage.CREATE_MBEAN_LOADER_PARAMS;
@@ -245,7 +245,7 @@ public class ClientIntermediary {
     public void unregisterMBean(ObjectName name, Subject delegationSubject)
             throws InstanceNotFoundException, MBeanRegistrationException, IOException {
 
-        logger.trace("unregisterMBean", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             mBeanServerRequest(MBeanServerRequestMessage.UNREGISTER_MBEAN, new Object[] {name}, delegationSubject);
@@ -261,7 +261,7 @@ public class ClientIntermediary {
     public ObjectInstance getObjectInstance(ObjectName name, Subject delegationSubject)
             throws InstanceNotFoundException, IOException {
 
-        logger.trace("getObjectInstance", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (ObjectInstance) mBeanServerRequest(
@@ -275,7 +275,7 @@ public class ClientIntermediary {
 
     public Set queryMBeans(ObjectName name, QueryExp query, Subject delegationSubject) throws IOException {
 
-        logger.trace("queryMBeans", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (Set) mBeanServerRequest(
@@ -289,7 +289,7 @@ public class ClientIntermediary {
 
     public Set queryNames(ObjectName name, QueryExp query, Subject delegationSubject) throws IOException {
 
-        logger.trace("queryNames", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (Set) mBeanServerRequest(
@@ -303,7 +303,7 @@ public class ClientIntermediary {
 
     public boolean isRegistered(ObjectName name, Subject delegationSubject) throws IOException {
 
-        logger.trace("isRegistered", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             Boolean is = (Boolean)
@@ -317,7 +317,7 @@ public class ClientIntermediary {
 
     public Integer getMBeanCount(Subject delegationSubject) throws IOException {
 
-        logger.trace("getMBeanCount", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (Integer) mBeanServerRequest(MBeanServerRequestMessage.GET_MBEAN_COUNT, null, delegationSubject);
@@ -330,7 +330,7 @@ public class ClientIntermediary {
             throws MBeanException, AttributeNotFoundException, InstanceNotFoundException, ReflectionException,
                     IOException {
 
-        logger.trace("getAttribute", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return mBeanServerRequest(
@@ -351,7 +351,7 @@ public class ClientIntermediary {
     public AttributeList getAttributes(ObjectName name, String[] attributes, Subject delegationSubject)
             throws InstanceNotFoundException, ReflectionException, IOException {
 
-        logger.trace("getAttributes", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (AttributeList) mBeanServerRequest(
@@ -369,7 +369,7 @@ public class ClientIntermediary {
             throws InstanceNotFoundException, AttributeNotFoundException, InvalidAttributeValueException,
                     MBeanException, ReflectionException, IOException {
 
-        logger.trace("setAttribute", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             mBeanServerRequest(
@@ -394,7 +394,7 @@ public class ClientIntermediary {
     public AttributeList setAttributes(ObjectName name, AttributeList attributes, Subject delegationSubject)
             throws InstanceNotFoundException, ReflectionException, IOException {
 
-        logger.trace("setAttributes", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             Object wrappedAttrs = serialization.wrap(attributes);
@@ -413,7 +413,7 @@ public class ClientIntermediary {
             ObjectName name, String operationName, Object params[], String signature[], Subject delegationSubject)
             throws InstanceNotFoundException, MBeanException, ReflectionException, IOException {
 
-        logger.trace("invoke", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return mBeanServerRequest(
@@ -433,7 +433,7 @@ public class ClientIntermediary {
 
     public String getDefaultDomain(Subject delegationSubject) throws IOException {
 
-        logger.trace("getDefaultDomain", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             int code = MBeanServerRequestMessage.GET_DEFAULT_DOMAIN;
@@ -445,7 +445,7 @@ public class ClientIntermediary {
 
     public String[] getDomains(Subject delegationSubject) throws IOException {
 
-        logger.trace("getDomains", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (String[]) mBeanServerRequest(MBeanServerRequestMessage.GET_DOMAINS, null, delegationSubject);
@@ -457,7 +457,7 @@ public class ClientIntermediary {
     public MBeanInfo getMBeanInfo(ObjectName name, Subject delegationSubject)
             throws InstanceNotFoundException, IntrospectionException, ReflectionException, IOException {
 
-        logger.trace("getMBeanInfo", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             return (MBeanInfo) mBeanServerRequest(
@@ -476,7 +476,7 @@ public class ClientIntermediary {
     public boolean isInstanceOf(ObjectName name, String className, Subject delegationSubject)
             throws InstanceNotFoundException, IOException {
 
-        logger.trace("isInstanceOf", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             Boolean is = (Boolean) mBeanServerRequest(
@@ -496,7 +496,7 @@ public class ClientIntermediary {
             Object handback,
             Subject delegationSubject)
             throws InstanceNotFoundException, IOException {
-        logger.trace("addNotificationListener", "name=" + name);
+        LOG.log(Level.TRACE, "name=" + name);
 
         final Integer listenerID = addListenerWithSubject(name, serialization.wrap(filter), delegationSubject, true);
         notifForwarder.addNotificationListener(listenerID, name, listener, filter, handback, delegationSubject);
@@ -505,9 +505,9 @@ public class ClientIntermediary {
     private Integer addListenerWithSubject(
             ObjectName name, Object wrappedFilter, Subject delegationSubject, boolean reconnect)
             throws InstanceNotFoundException, IOException {
-        final boolean debug = logger.debugOn();
+        final boolean debug = LOG.isLoggable(Level.TRACE);
         if (debug) {
-            logger.debug("addListenerWithSubject", "(ObjectName,Object,Subject)");
+            LOG.log(Level.TRACE, "(ObjectName,Object,Subject)");
         }
 
         final ObjectName[] names = {name};
@@ -532,7 +532,7 @@ public class ClientIntermediary {
             ObjectName name, ObjectName listener, NotificationFilter filter, Object handback, Subject delegationSubject)
             throws InstanceNotFoundException, IOException {
 
-        logger.trace("addNotificationListener", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             int code = MBeanServerRequestMessage.ADD_NOTIFICATION_LISTENER_OBJECTNAME;
@@ -550,7 +550,7 @@ public class ClientIntermediary {
     public void removeNotificationListener(ObjectName name, NotificationListener listener, Subject delegationSubject)
             throws InstanceNotFoundException, ListenerNotFoundException, IOException {
 
-        logger.trace("removeNotificationListener", "called");
+        LOG.log(Level.TRACE, "called");
 
         final Integer[] ids = notifForwarder.removeNotificationListener(name, listener);
 
@@ -574,7 +574,7 @@ public class ClientIntermediary {
             Subject delegationSubject)
             throws InstanceNotFoundException, ListenerNotFoundException, IOException {
 
-        logger.trace("removeNotificationListener", "called");
+        LOG.log(Level.TRACE, "called");
 
         final Integer ids = notifForwarder.removeNotificationListener(name, listener, filter, handback);
         try {
@@ -592,7 +592,7 @@ public class ClientIntermediary {
     public void removeNotificationListener(ObjectName name, ObjectName listener, Subject delegationSubject)
             throws InstanceNotFoundException, ListenerNotFoundException, IOException {
 
-        logger.trace("removeNotificationListener", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             int code = MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_OBJECTNAME;
@@ -610,7 +610,7 @@ public class ClientIntermediary {
             ObjectName name, ObjectName listener, NotificationFilter filter, Object handback, Subject delegationSubject)
             throws InstanceNotFoundException, ListenerNotFoundException, IOException {
 
-        logger.trace("removeNotificationListener", "called");
+        LOG.log(Level.TRACE, "called");
 
         try {
             int code = MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_OBJECTNAME_FILTER_HANDBACK;
@@ -628,7 +628,7 @@ public class ClientIntermediary {
     }
 
     public void terminate() {
-        logger.trace("terminate", "Terminated.");
+        LOG.log(Level.TRACE, "Terminated.");
 
         if (terminated) {
             return;
@@ -655,7 +655,7 @@ public class ClientIntermediary {
                 mBeanServerRequest(MBeanServerRequestMessage.GET_DEFAULT_DOMAIN, null, null, false);
             } catch (InterruptedIOException irie) {
                 // see  6496038
-                logger.trace("GenericClientCommunicatorAdmin-" + "checkConnection", "Timeout?", irie);
+                LOG.log(Level.TRACE, "Timeout?", irie);
 
                 if (requestTimeoutReconn) { // force the heartbeat to do reconnection
                     throw new IOException(irie.getMessage(), irie);
@@ -692,10 +692,7 @@ public class ClientIntermediary {
                             old[j].getHandback(),
                             old[i].getDelegationSubject());
                 } catch (InstanceNotFoundException infe) {
-                    logger.warning(
-                            "reconnectNotificationListeners",
-                            "Can't reconnect a listener for " + old[i].getObjectName(),
-                            infe);
+                    LOG.log(Level.WARNING, "Can't reconnect a listener for " + old[i].getObjectName(), infe);
                 }
             }
 
@@ -722,7 +719,7 @@ public class ClientIntermediary {
             try {
                 engine.close();
             } catch (IOException ioe) {
-                logger.info("close", ioe);
+                LOG.log(Level.INFO, ioe.toString(), ioe);
             }
         }
     }
@@ -736,7 +733,7 @@ public class ClientIntermediary {
         protected NotificationResult fetchNotifs(long clientSequenceNumber, int maxNotifications, long timeout)
                 throws IOException, ClassNotFoundException {
 
-            logger.trace("GenericClientNotifForwarder-fetchNotifs", "fetching notifs...");
+            LOG.log(Level.TRACE, "fetching notifs...");
 
             final NotificationRequestMessage nreq =
                     new NotificationRequestMessage(clientSequenceNumber, maxNotifications, timeout);
@@ -748,8 +745,8 @@ public class ClientIntermediary {
             if (!(unwrapped instanceof NotificationResult)) {
                 // This is a protocol error, so we close the client.
                 final String msg = "Not a NotificationResult: " + unwrapped.getClass();
-                logger.warning("Forwarder.fetchNotifs", msg);
-                logger.warning("Forwarder.fetchNotifs", "closing connector");
+                LOG.log(Level.WARNING, msg);
+                LOG.log(Level.WARNING, "closing connector");
                 engine.close();
                 /* Cast below will generate a ClassCastException, but
                 anyway this thread is going to die. */
@@ -759,9 +756,7 @@ public class ClientIntermediary {
 
         protected Integer addListenerForMBeanRemovedNotif() throws IOException, InstanceNotFoundException {
 
-            logger.trace(
-                    "GenericClientNotifForwarder-" + "addListenerForMBeanRemovedNotif",
-                    "Add a listener to receive UNREGISTRATION_NOTIFICATION");
+            LOG.log(Level.TRACE, "Add a listener to receive UNREGISTRATION_NOTIFICATION");
 
             NotificationFilterSupport clientFilter = new NotificationFilterSupport();
             clientFilter.enableType(MBeanServerNotification.UNREGISTRATION_NOTIFICATION);
@@ -783,9 +778,7 @@ public class ClientIntermediary {
 
         protected void removeListenerForMBeanRemovedNotif(Integer id) throws IOException {
 
-            logger.trace(
-                    "GenericClientNotifForwarder-" + "removeListenerForMBeanRemovedNotif",
-                    "Remove the listener used to receive " + "UNREGISTRATION_NOTIFICATION.");
+            LOG.log(Level.TRACE, "Remove the listener used to receive " + "UNREGISTRATION_NOTIFICATION.");
 
             try {
                 int code = MBeanServerRequestMessage.REMOVE_NOTIFICATION_LISTENER_FILTER_HANDBACK;
@@ -911,5 +904,5 @@ public class ClientIntermediary {
         }
     }
 
-    private static final ClassLogger logger = new ClassLogger("javax.management.remote.generic", "ClientIntermediary");
+    private static final System.Logger LOG = System.getLogger(ClientIntermediary.class.getName());
 }

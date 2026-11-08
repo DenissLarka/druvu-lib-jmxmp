@@ -50,15 +50,16 @@
 
 package com.druvu.jmxmp.server.generic;
 
-import com.druvu.jmxmp.server.security.AdminServer;
-import com.druvu.jmxmp.shared.DefaultConfig;
-import com.druvu.jmxmp.shared.ServerAdmin;
-import com.druvu.jmxmp.shared.ServerSynchroMessageConnection;
-import com.druvu.jmxmp.shared.SynchroCallback;
-import com.druvu.jmxmp.util.ClassLogger;
-import com.druvu.jmxmp.util.ThreadService;
+import com.druvu.jmxmp.internal.DefaultConfig;
+import com.druvu.jmxmp.internal.ServerSynchroMessageConnection;
+import com.druvu.jmxmp.internal.SynchroCallback;
+import com.druvu.jmxmp.server.internal.ServerAdmin;
+import com.druvu.jmxmp.server.internal.ServerConfig;
+import com.druvu.jmxmp.util.ConnectorThreads;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import javax.management.remote.generic.MessageConnection;
 import javax.management.remote.message.CloseMessage;
 import javax.management.remote.message.Message;
@@ -75,7 +76,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
 
         waitConnectedState = DefaultConfig.getTimeoutForWaitConnectedState(env);
 
-        this.serverAdmin = DefaultConfig.getServerAdmin(this.env, () -> new AdminServer(this.env));
+        this.serverAdmin = ServerConfig.getServerAdmin(this.env);
 
         connection = mc;
     }
@@ -111,9 +112,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
     }
 
     public void sendOneWay(Message msg) throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("sendOneWay", "Send a message without response.");
-        }
+        LOG.log(Level.TRACE, "Send a message without response.");
 
         waitConnected();
 
@@ -123,9 +122,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
     }
 
     public void setCallback(SynchroCallback cb) {
-        if (logger.traceOn()) {
-            logger.trace("setCallback", "be called.");
-        }
+        LOG.log(Level.TRACE, "be called.");
 
         if (callback != null) {
             throw new IllegalArgumentException("The callback has been assigned.");
@@ -136,10 +133,11 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
         }
         callback = cb;
 
-        threads = new ThreadService(DefaultConfig.getServerMinThreads(env), DefaultConfig.getServerMaxThreads(env));
+        // max.threads bounds the requests; the reader runs for the connection's whole life on a thread of its own.
+        threads = ConnectorThreads.pool("server-connection", DefaultConfig.getServerMaxThreads(env) + 1);
 
         reader = new MessageReader();
-        threads.handoff(reader);
+        threads.execute(reader);
     }
 
     public String getConnectionId() {
@@ -147,9 +145,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
     }
 
     public void close() throws IOException {
-        if (logger.traceOn()) {
-            logger.trace("close", "Closing this SynchroMessageConnection.");
-        }
+        LOG.log(Level.TRACE, "Closing this SynchroMessageConnection.");
 
         synchronized (stateLock) {
             if (state == TERMINATED) {
@@ -158,22 +154,18 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
 
             state = TERMINATED;
 
-            if (logger.traceOn()) {
-                logger.trace("close", "Close the callback reader.");
-            }
+            LOG.log(Level.TRACE, "Close the callback reader.");
             if (reader != null) {
                 reader.stop();
             }
 
             if (threads != null) {
-                threads.terminate();
+                ConnectorThreads.stop(threads);
 
                 threads = null;
             }
 
-            if (logger.traceOn()) {
-                logger.trace("close", "Closing the underlying connection.");
-            }
+            LOG.log(Level.TRACE, "Closing the underlying connection.");
             if (connection != null) {
                 connection.close();
             }
@@ -181,9 +173,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
             serverAdmin.connectionClosed(connection);
 
             // clean
-            if (logger.traceOn()) {
-                logger.trace("close", "Clean all threads waiting theire responses.");
-            }
+            LOG.log(Level.TRACE, "Clean all threads waiting theire responses.");
 
             stateLock.notify();
         }
@@ -208,9 +198,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
                 Message msg;
 
                 while (!stopped()) {
-                    if (logger.traceOn()) {
-                        logger.trace("MessageReader-run", "Waiting a coming message...");
-                    }
+                    LOG.log(Level.TRACE, "Waiting a coming message...");
 
                     msg = null;
 
@@ -231,7 +219,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
                         break;
                     }
 
-                    threads.handoff(new RemoteJob(msg));
+                    threads.execute(new RemoteJob(msg));
 
                     if (msg instanceof CloseMessage) {
                         break;
@@ -239,24 +227,18 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
                 }
             } catch (Exception eee) {
                 // need to stop
-                if (logger.traceOn()) {
-                    logger.trace("MessageReader-run", "stops.");
-                }
+                LOG.log(Level.TRACE, "stops.");
             }
 
             synchronized (stateLock) {
                 executingThreadInterrupted = true;
             }
 
-            if (logger.traceOn()) {
-                logger.trace("MessageReader-run", "ended.");
-            }
+            LOG.log(Level.TRACE, "ended.");
         }
 
         public void stop() {
-            if (logger.traceOn()) {
-                logger.trace("MessageReader-terminated", "be called.");
-            }
+            LOG.log(Level.TRACE, "be called.");
 
             synchronized (stateLock) {
                 if (Thread.currentThread() != executingThread
@@ -269,9 +251,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
                 }
             }
 
-            if (logger.traceOn()) {
-                logger.trace("MessageReader-terminated", "done.");
-            }
+            LOG.log(Level.TRACE, "done.");
         }
 
         private boolean stopped() {
@@ -293,9 +273,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
         }
 
         public void run() {
-            if (logger.traceOn()) {
-                logger.trace("RemoteJob-run", "Receive a new request.");
-            }
+            LOG.log(Level.TRACE, "Receive a new request.");
 
             try {
                 Message resp = callback.execute(msg);
@@ -368,7 +346,7 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
     private Map env;
 
     private transient SynchroCallback callback;
-    private transient ThreadService threads;
+    private transient ExecutorService threads;
     private transient MessageReader reader;
 
     // state issues
@@ -387,5 +365,5 @@ public class ServerSynchroMessageConnectionImpl implements ServerSynchroMessageC
 
     private long waitConnectedState;
 
-    private final ClassLogger logger = new ClassLogger("javax.management.remote.misc", "SynchroMessageConnectionImpl");
+    private static final System.Logger LOG = System.getLogger(ServerSynchroMessageConnectionImpl.class.getName());
 }

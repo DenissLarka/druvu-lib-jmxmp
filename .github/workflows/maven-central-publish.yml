@@ -1,4 +1,4 @@
-# Builds the reactor and publishes druvu-lib-jmxmp-{common,client,server} to
+# Builds the reactor and publishes druvu-lib-jmxmp-{access,common,client,server} to
 # Maven Central when a GitHub release is created. The it/validation modules are
 # excluded via maven.deploy.skip in their poms.
 #

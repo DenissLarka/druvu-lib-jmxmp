@@ -3,7 +3,7 @@ package com.druvu.jmxmp.it;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
-import com.druvu.jmxmp.server.security.AllowAnyAuthenticator;
+import com.druvu.jmxmp.server.AllowAnyAuthenticator;
 import java.io.IOException;
 import java.security.Principal;
 import java.util.HashMap;
@@ -54,6 +54,7 @@ public class SecurityPolicyIT {
             {"TLS SASL/EXTERNAL", SecurityException.class},
             {"TLS SASL/GSSAPI", SecurityException.class},
             {"TLS SASL/PLAIN SASL/CRAM-MD5", SecurityException.class}, // extra entry
+            {"SASL/PLAIN TLS", SecurityException.class}, // the right set, but SASL would run before TLS
         };
     }
 
@@ -84,6 +85,23 @@ public class SecurityPolicyIT {
             fail("expected IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("JMXAuthenticator"), e.getMessage());
+        }
+    }
+
+    /**
+     * A server offering SASL before TLS → SecurityException: a client that mirrors the offer would run SASL in clear.
+     */
+    @Test
+    public void serverOfferWithSaslBeforeTlsRejected() throws Exception {
+        MBeanServer mbs = MBeanServerFactory.newMBeanServer();
+        Map<String, Object> env = new HashMap<>();
+        env.put("jmx.remote.profiles", "SASL/PLAIN TLS");
+        env.put(JMXConnectorServer.AUTHENTICATOR, new TestAuthenticator(Map.of()));
+        try {
+            new JMXMPConnectorServer(url(), env, mbs);
+            fail("expected SecurityException");
+        } catch (SecurityException e) {
+            assertTrue(e.getMessage().contains("TLS"), e.getMessage());
         }
     }
 
