@@ -344,7 +344,7 @@ public class SocketConnection implements SocketConnectionIf, MessageConnection {
             this.cloader = cl;
             // Default-deny allow-list over the JMXMP protocol-message stream
             // (applies from the very first handshake message, pre-auth).
-            this.setObjectInputFilter(JmxmpSerialFilter.wireFilter());
+            this.setObjectInputFilter(JmxmpSerialFilter.messageFilter());
         }
 
         protected Class resolveClass(ObjectStreamClass aClass) throws IOException, ClassNotFoundException {

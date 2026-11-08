@@ -149,7 +149,8 @@ What bounds it in this fork:
   `com.sun.rowset.JdbcRowSetImpl`, Xalan `TemplatesImpl`, `sun.*`,
   `javassist`, `bsh`, …) fall outside the allow-list and are refused. It
   also rejects oversized graphs (depth/refs/array-length caps) to blunt
-  decompression-style DoS. This filter is **merged with**, never weakens,
+  decompression-style DoS; the message stream, all a client can send before
+  login, gets the tighter depth cap (16; payloads 64). This filter is **merged with**, never weakens,
   any process-wide `jdk.serialFilter` you set — a reject from either wins.
 - Deserialization-heavy MBean traffic only flows **after** a successful
   TLS handshake **and** a successful `JMXAuthenticator` check. An anonymous

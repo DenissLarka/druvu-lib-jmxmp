@@ -78,4 +78,21 @@ public class SerialFilterIT {
         assertEquals(f.checkInput(info(String.class, -1, 1, JmxmpSerialFilter.MAX_REFS + 1L)), Status.REJECTED);
         assertEquals(f.checkInput(info(String.class, JmxmpSerialFilter.MAX_ARRAY + 1L, 1, 1)), Status.REJECTED);
     }
+
+    /**
+     * Messages are shallow (every MBean value inside one travels wrapped, through the payload filter), and before login
+     * a client can send nothing else: the message stream gets the tighter depth cap, the payloads keep theirs.
+     */
+    @Test
+    public void capsMessagesTighterThanPayloads() {
+        ObjectInputFilter messages = JmxmpSerialFilter.messageFilter();
+        int cap = JmxmpSerialFilter.MAX_MESSAGE_DEPTH;
+        assertEquals(messages.checkInput(info(String.class, -1, cap, 1)), Status.ALLOWED);
+        assertEquals(messages.checkInput(info(String.class, -1, cap + 1, 1)), Status.REJECTED);
+        assertEquals(messages.checkInput(info(java.io.File.class, -1, 1, 1)), Status.REJECTED, "the same allow-list");
+        assertEquals(
+                JmxmpSerialFilter.wireFilter().checkInput(info(String.class, -1, cap + 1, 1)),
+                Status.ALLOWED,
+                "a payload may go deeper: platform MXBean data reaches 15");
+    }
 }

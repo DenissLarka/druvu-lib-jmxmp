@@ -47,15 +47,26 @@ import java.util.List;
  *
  * <p><b>Resource limits.</b> Independently of class allow-listing, oversized graphs are rejected
  * (depth&nbsp;&gt;&nbsp;{@value #MAX_DEPTH}, refs&nbsp;&gt;&nbsp;{@value #MAX_REFS},
- * array&nbsp;length&nbsp;&gt;&nbsp;{@value #MAX_ARRAY}) to blunt decompression/quadratic-blowup DoS.
+ * array&nbsp;length&nbsp;&gt;&nbsp;{@value #MAX_ARRAY}) to blunt decompression/quadratic-blowup DoS. Two filters apply
+ * them: {@link #messageFilter()} on the message stream, with the tighter depth cap {@value #MAX_MESSAGE_DEPTH}, and
+ * {@link #wireFilter()} on the MBean payloads inside the messages.
  */
 public final class JmxmpSerialFilter {
 
     /** System property: {@code ;}-separated extra allowed class-name prefixes. */
     public static final String ALLOW_PROPERTY = "com.druvu.jmxmp.serial.allow";
 
-    /** Max object-graph depth; deeper graphs are rejected regardless of class. */
+    /**
+     * Max object-graph depth of a payload (an MBean value, parameter, result or notification); deeper graphs are
+     * rejected regardless of class. Platform MXBean data reaches 15 (a GC notification as a fetch carries it).
+     */
     public static final int MAX_DEPTH = 64;
+
+    /**
+     * Max object-graph depth of a message. Every MBean value inside a message travels wrapped, through the payload
+     * filter, so a message itself is shallow; before login a client can send nothing but messages.
+     */
+    public static final int MAX_MESSAGE_DEPTH = 16;
     /** Max total back-references; larger graphs are rejected. */
     public static final int MAX_REFS = 1_000_000;
     /** Max single-array length; larger arrays are rejected. */
@@ -66,24 +77,43 @@ public final class JmxmpSerialFilter {
     };
 
     private static volatile ObjectInputFilter cached;
+    private static volatile ObjectInputFilter cachedForMessages;
 
     private JmxmpSerialFilter() {}
 
     /**
-     * The shared wire filter — built once from {@value #ALLOW_PROPERTY} and the process-wide filter, then cached. Apply
-     * with {@link java.io.ObjectInputStream#setObjectInputFilter} on every stream that reads peer data.
+     * The shared payload filter — built once from {@value #ALLOW_PROPERTY} and the process-wide filter, then cached.
+     * Apply with {@link java.io.ObjectInputStream#setObjectInputFilter} on every stream of peer data other than the
+     * message stream, which takes {@link #messageFilter()}.
      */
     public static ObjectInputFilter wireFilter() {
         ObjectInputFilter f = cached;
         if (f == null) {
-            f = build(System.getProperty(ALLOW_PROPERTY));
+            f = build(System.getProperty(ALLOW_PROPERTY), MAX_DEPTH);
             cached = f;
+        }
+        return f;
+    }
+
+    /**
+     * The message-stream filter: the same allow-list and limits as {@link #wireFilter()}, depth capped at
+     * {@value #MAX_MESSAGE_DEPTH}.
+     */
+    public static ObjectInputFilter messageFilter() {
+        ObjectInputFilter f = cachedForMessages;
+        if (f == null) {
+            f = build(System.getProperty(ALLOW_PROPERTY), MAX_MESSAGE_DEPTH);
+            cachedForMessages = f;
         }
         return f;
     }
 
     // Visible for testing — bypasses the system property + cache.
     static ObjectInputFilter build(String extraPrefixes) {
+        return build(extraPrefixes, MAX_DEPTH);
+    }
+
+    private static ObjectInputFilter build(String extraPrefixes, int maxDepth) {
         List<String> allow = new ArrayList<>(List.of(BASE_ALLOWED));
         if (extraPrefixes != null && !extraPrefixes.isBlank()) {
             for (String p : extraPrefixes.split(";")) {
@@ -94,14 +124,15 @@ public final class JmxmpSerialFilter {
             }
         }
         String[] prefixes = allow.toArray(new String[0]);
-        ObjectInputFilter base = info -> evaluate(info, prefixes);
+        ObjectInputFilter base = info -> evaluate(info, prefixes, maxDepth);
 
         ObjectInputFilter process = ObjectInputFilter.Config.getSerialFilter();
         return process == null ? base : ObjectInputFilter.merge(base, process);
     }
 
-    private static ObjectInputFilter.Status evaluate(ObjectInputFilter.FilterInfo info, String[] prefixes) {
-        if (info.depth() > MAX_DEPTH
+    private static ObjectInputFilter.Status evaluate(
+            ObjectInputFilter.FilterInfo info, String[] prefixes, int maxDepth) {
+        if (info.depth() > maxDepth
                 || info.references() > MAX_REFS
                 || (info.arrayLength() >= 0 && info.arrayLength() > MAX_ARRAY)) {
             return ObjectInputFilter.Status.REJECTED;
