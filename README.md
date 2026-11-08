@@ -106,7 +106,7 @@ deployment resolves with only its own module + `common` on the path.
 
 ## Adding the dependency
 
-On **Maven Central** — `groupId` `com.druvu`, current version `2.0.0`. Pick the
+On **Maven Central** — `groupId` `com.druvu`, current version `2.0.1`. Pick the
 module(s) for your scenario:
 
 **Client only**
@@ -115,7 +115,7 @@ module(s) for your scenario:
 <dependency>
     <groupId>com.druvu</groupId>
     <artifactId>druvu-lib-jmxmp-client</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
@@ -125,7 +125,7 @@ module(s) for your scenario:
 <dependency>
     <groupId>com.druvu</groupId>
     <artifactId>druvu-lib-jmxmp-server</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
